@@ -47,7 +47,10 @@ const ANCHORS: { strength: 0 | 1 | 2 | 3 | 4; label: string }[] = [
  *   `FreedomSession` (never two): "Done" writes it, and so does tapping a
  *   conviction anchor, because that tap is itself the end of the exercise —
  *   pressing Done first closes the sheet, so the two paths are mutually
- *   exclusive. `saving` guards a double tap.
+ *   exclusive. `saving` guards a double tap, and `sessionWrittenRef` guards
+ *   the partial-failure case: if the session write succeeds and the assessment
+ *   write then throws, the sheet stays open for a retry, and that retry must
+ *   not commit a second session for the same exercise.
  * - Abandoning the sheet (X, Escape, Android back) writes NOTHING, per the
  *   write-once contract on `FreedomSession` in `domain/types.ts`.
  * - `startedAt` is captured when the sheet opens, not when Done is pressed, so
@@ -66,9 +69,15 @@ export function ExerciseSheet({
 }: ExerciseSheetProps) {
   const [saving, setSaving] = useState(false);
   const startedAtRef = useRef<string | null>(null);
+  // Latches once the session row is committed, so a retry after a FAILED
+  // assessment write (the session having already landed) doesn't log the same
+  // exercise twice. Cleared when the sheet opens, alongside `startedAt`.
+  const sessionWrittenRef = useRef(false);
 
   useEffect(() => {
-    if (beliefId !== null) startedAtRef.current = toLocalIso(new Date());
+    if (beliefId === null) return;
+    startedAtRef.current = toLocalIso(new Date());
+    sessionWrittenRef.current = false;
   }, [beliefId]);
 
   const lesson = useMemo(() => {
@@ -91,14 +100,17 @@ export function ExerciseSheet({
     if (beliefId === null || lesson === null || saving) return;
     setSaving(true);
     try {
-      await store.addFreedomSession({
-        id: crypto.randomUUID(),
-        startedAt: startedAtRef.current ?? toLocalIso(new Date()),
-        endedAt: toLocalIso(new Date()),
-        kind: 'exercise',
-        beliefId,
-        lessonId: lesson.id,
-      });
+      if (!sessionWrittenRef.current) {
+        await store.addFreedomSession({
+          id: crypto.randomUUID(),
+          startedAt: startedAtRef.current ?? toLocalIso(new Date()),
+          endedAt: toLocalIso(new Date()),
+          kind: 'exercise',
+          beliefId,
+          lessonId: lesson.id,
+        });
+        sessionWrittenRef.current = true;
+      }
 
       if (strength !== undefined) {
         await store.addBeliefAssessment({
@@ -158,7 +170,7 @@ export function ExerciseSheet({
 
           <div className="border-t border-border pt-4">
             <p className="mb-2 text-[13px] text-ink-muted">
-              How convincing does it feel right now?
+              How convincing does it feel right now? &mdash; optional
             </p>
             <div className="flex flex-wrap gap-2">
               {ANCHORS.map((anchor) => (
@@ -172,6 +184,9 @@ export function ExerciseSheet({
                 </Chip>
               ))}
             </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-ink-faint">
+              Whichever you tap closes this.
+            </p>
           </div>
         </div>
       ) : null}

@@ -22,6 +22,11 @@ export type ProofSectionProps = {
  * nothing rather than a hedged sentence, because an empty card here would be
  * an invitation to log cravings, which is the Progress screen's job.
  *
+ * The counts read "N times", the wording `proofLine` uses in
+ * `domain/freedom/evidence.ts`, because `triggerProof` counts RESOLVED
+ * sessions only: a craving still open appears in neither number, so calling
+ * the first one "logged" would quietly overstate what happened.
+ *
  * Ordering is by raw `perTriggerStats` total with a `TRIGGER_ORDER` tie-break,
  * the same deterministic arrangement `TriggersSection` uses.
  */
@@ -70,7 +75,7 @@ export function ProofSection({ sessions }: ProofSectionProps) {
                 <span aria-hidden="true">{meta.emoji}</span> {meta.label}
               </span>
               <span className="text-[13px] tabular-nums text-ink-muted">
-                {total} logged · {passed} passed without smoking
+                {total} times · {passed} passed without smoking
               </span>
             </li>
           );
