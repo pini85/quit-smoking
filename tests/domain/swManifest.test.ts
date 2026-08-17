@@ -180,6 +180,22 @@ describe('renderServiceWorker', () => {
     expect(source).not.toContain('__CACHE_VERSION__');
   });
 
+  // `String.replace` with a *string* replacement expands `$&`, `$$`, "$`" and
+  // `$'`. Next puts `$` in its segment payload filenames, so the injection has
+  // to go through a replacer function or those URLs silently corrupt.
+  it('injects URLs containing `$` verbatim', () => {
+    const urls = [
+      '/health/lungs/__next.health.$d$category.__PAGE__.txt',
+      '/a$&b.txt',
+      '/c$$d.txt',
+      "/e$'f.txt",
+      '/g$`h.txt',
+    ];
+    const source = renderServiceWorker(template, urls, 'abc123def456');
+    expect(source).toContain(`const PRECACHE_MANIFEST = ${JSON.stringify(urls)};`);
+    expect(JSON.parse(source.match(/const PRECACHE_MANIFEST = (\[.*\]);/)![1])).toEqual(urls);
+  });
+
   it('throws rather than silently shipping a worker with no precache list', () => {
     expect(() => renderServiceWorker('// nothing to replace', [], 'abc123def456')).toThrow(
       /expected exactly 1 occurrence/

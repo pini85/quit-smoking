@@ -145,9 +145,13 @@ export function renderServiceWorker(template, urls, version) {
     }
   }
 
+  // Replacer FUNCTIONS, not strings: `String.replace` interprets `$&`, `$$`,
+  // "$`" and `$'` inside a string replacement, and Next emits `$` in its
+  // segment payload filenames (`__next.health.$d$category.__PAGE__.txt`).
+  // A string replacement would silently corrupt those URLs.
   return template
-    .replace(MANIFEST_PLACEHOLDER, JSON.stringify(urls))
-    .replace(VERSION_PLACEHOLDER, version);
+    .replace(MANIFEST_PLACEHOLDER, () => JSON.stringify(urls))
+    .replace(VERSION_PLACEHOLDER, () => version);
 }
 
 /**

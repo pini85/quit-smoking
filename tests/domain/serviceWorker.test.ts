@@ -47,6 +47,12 @@ function absolute(url: string): string {
   return new URL(url, ORIGIN).href;
 }
 
+function withoutSearch(href: string): string {
+  const url = new URL(href);
+  url.search = '';
+  return url.href;
+}
+
 /** The Cache API stores bytes, so a match is replayable — a stored `Response` would not be. */
 class FakeCache {
   readonly store = new Map<string, StoredBody>();
@@ -56,18 +62,40 @@ class FakeCache {
     this.store.set(key, { status: response.status, body: await response.text() });
   }
 
-  async match(request: Request | string): Promise<Response | undefined> {
+  async match(
+    request: Request | string,
+    options?: { ignoreSearch?: boolean }
+  ): Promise<Response | undefined> {
     const key = typeof request === 'string' ? absolute(request) : request.url;
+
+    if (options?.ignoreSearch) {
+      // Real `ignoreSearch` compares query-stripped URLs on BOTH sides; this
+      // fake must too, or the `?_rsc=` regression it guards would go unnoticed.
+      const wanted = withoutSearch(key);
+      for (const [stored, entry] of this.store) {
+        if (withoutSearch(stored) === wanted) return makeResponse(stored, entry.status, entry.body);
+      }
+      return undefined;
+    }
+
     const entry = this.store.get(key);
     return entry ? makeResponse(key, entry.status, entry.body) : undefined;
   }
 
+  /** All-or-nothing, exactly like the real thing. */
   async addAll(urls: string[]): Promise<void> {
-    for (const url of urls) {
-      const response = await harness.fetch(absolute(url));
-      if (!response.ok) throw new Error(`addAll failed for ${url}: ${response.status}`);
-      await this.put(absolute(url), response);
-    }
+    const responses = await Promise.all(urls.map((url) => harness.fetch(absolute(url))));
+    responses.forEach((response, index) => {
+      if (!response.ok) throw new Error(`addAll failed for ${urls[index]}: ${response.status}`);
+    });
+    await Promise.all(responses.map((response, index) => this.put(absolute(urls[index]), response)));
+  }
+
+  /** Single-entry add; rejects on a non-2xx, which is what makes it best-effort-able. */
+  async add(url: string): Promise<void> {
+    const response = await harness.fetch(absolute(url));
+    if (!response.ok) throw new Error(`add failed for ${url}: ${response.status}`);
+    await this.put(absolute(url), response);
   }
 }
 
@@ -96,6 +124,7 @@ type Harness = {
   listeners: Map<string, (event: Record<string, unknown>) => void>;
   origin: Map<string, { status: number; body: string; type?: string }>;
   networkLog: string[];
+  warnings: string[];
   online: boolean;
   skipWaitingCalls: number;
   claimCalls: number;
@@ -115,6 +144,7 @@ function boot(): void {
     listeners,
     origin,
     networkLog,
+    warnings: [],
     online: true,
     skipWaitingCalls: 0,
     claimCalls: 0,
@@ -157,7 +187,9 @@ function boot(): void {
     Set,
     Promise,
     TypeError,
-    console,
+    // Captured rather than printed: best-effort precache failures are an
+    // assertable behaviour, not noise in the test log.
+    console: { warn: (...args: unknown[]) => harness.warnings.push(args.join(' ')) },
   });
 }
 
@@ -214,6 +246,23 @@ describe('install', () => {
   it('never calls skipWaiting on its own — a live craving session must not be reloaded', async () => {
     await dispatch('install');
     expect(harness.skipWaitingCalls).toBe(0);
+  });
+
+  it('survives a missing RSC payload — those are best-effort, not all-or-nothing', async () => {
+    harness.origin.delete(absolute('/progress.txt'));
+
+    await expect(dispatch('install')).resolves.toBeUndefined();
+
+    const cache = await currentCache();
+    // Everything else still landed, including every route HTML.
+    expect(cache.store.has(absolute('/progress.html'))).toBe(true);
+    expect(cache.store.has(absolute('/progress.txt'))).toBe(false);
+    expect(harness.warnings.join(' ')).toContain('/progress.txt');
+  });
+
+  it('still fails loudly if a CRITICAL entry is missing', async () => {
+    harness.origin.delete(absolute('/progress.html'));
+    await expect(dispatch('install')).rejects.toThrow(/progress\.html/);
   });
 });
 
@@ -284,6 +333,60 @@ describe('offline navigation', () => {
   it('serves the RSC payloads that soft navigations depend on', async () => {
     const response = await dispatch('fetch', { request: new Request(absolute('/progress.txt')) });
     expect(await response?.text()).toBe('body:/progress.txt');
+  });
+
+  // The regression that shipped in round 1: Next appends `?_rsc=<hash>` to
+  // every RSC fetch, so a plain `cache.match` misses the precached payload and
+  // every offline tab tap 503s into a full page reload.
+  it.each([
+    ['/progress.txt?_rsc=1a2b3c', '/progress.txt'],
+    ['/index.txt?_rsc=deadbee', '/index.txt'],
+  ])('serves %s from the precached %s despite the cache-busting query', async (requested, key) => {
+    const response = await dispatch('fetch', { request: new Request(absolute(requested)) });
+    expect(response?.status).toBe(200);
+    expect(await response?.text()).toBe(`body:${key}`);
+    expect(harness.networkLog).toEqual([]);
+  });
+
+  it('503s an RSC payload it never cached, so the router falls back to a hard nav', async () => {
+    const response = await dispatch('fetch', {
+      request: new Request(absolute('/nowhere.txt?_rsc=1a2b3c')),
+    });
+    expect(response?.status).toBe(503);
+  });
+});
+
+describe('online navigation', () => {
+  beforeEach(async () => {
+    await dispatch('install');
+    await dispatch('activate');
+    harness.online = true;
+    harness.networkLog.length = 0;
+  });
+
+  // Round-1 regression: `matchNavigation` returned the app shell for anything
+  // it did not recognise, which made the `fetch(request)` below dead code and
+  // handed every unknown URL the Today screen instead of the host's 404.
+  it('consults the network for a path this build never emitted', async () => {
+    const url = absolute('/typo-in-the-url');
+    harness.origin.set(url, { status: 404, body: 'netlify 404 page' });
+
+    const body = await navigate('/typo-in-the-url');
+
+    expect(harness.networkLog).toContain(url);
+    expect(body).toBe('netlify 404 page');
+  });
+
+  it('does not cache that 404 response', async () => {
+    harness.origin.set(absolute('/typo-in-the-url'), { status: 404, body: 'netlify 404 page' });
+    await navigate('/typo-in-the-url');
+    await settle();
+    expect((await currentCache()).store.has(absolute('/typo-in-the-url'))).toBe(false);
+  });
+
+  it('still answers known routes from cache without a network round trip', async () => {
+    expect(await navigate('/health/lungs')).toBe('body:/health/lungs.html');
+    expect(harness.networkLog).toEqual([]);
   });
 });
 

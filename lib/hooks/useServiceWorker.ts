@@ -26,6 +26,10 @@ export function useServiceWorker(): UseServiceWorkerResult {
   // A `controllerchange` fires once per activation, but a pathological worker
   // could activate repeatedly; reloading more than once would be a loop.
   const reloadedRef = useRef(false);
+  // Set the moment the user taps Refresh. Needed because a visitor whose very
+  // first session spans a deploy is uncontrolled at setup — without this the
+  // `wasControlled` guard would swallow their reload and strand the banner.
+  const appliedRef = useRef(false);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== 'production') return;
@@ -63,7 +67,11 @@ export function useServiceWorker(): UseServiceWorkerResult {
     }
 
     function onControllerChange() {
-      if (!wasControlled || reloadedRef.current) return;
+      // Reload only for a real version swap: either this page was already
+      // controlled (so a new worker taking over IS an update), or the user
+      // just asked for one. A first-ever visit's `clients.claim()` is neither.
+      if (!wasControlled && !appliedRef.current) return;
+      if (reloadedRef.current) return;
       reloadedRef.current = true;
       window.location.reload();
     }
@@ -94,6 +102,7 @@ export function useServiceWorker(): UseServiceWorkerResult {
 
   const applyUpdate = useCallback(() => {
     if (!waiting) return;
+    appliedRef.current = true;
     // The reload happens in `controllerchange`, once the new worker is in
     // charge — reloading here would just re-run the old version.
     waiting.postMessage({ type: 'SKIP_WAITING' });
