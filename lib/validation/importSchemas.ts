@@ -1,15 +1,15 @@
 /**
  * zod/mini schemas validating an already-migrated import file against
- * `ExportFileV1` strictly enough to protect the database. Every optional
+ * `ExportFileV2` strictly enough to protect the database. Every optional
  * field that exists on the domain types is declared here too — `z.object()`
  * strips unknown keys, so an omitted-but-real field would silently vanish
  * from a legitimate export on reimport.
  */
 
 import * as z from 'zod/mini';
-import { TRIGGERS, OUTCOMES } from '@/domain/types';
+import { TRIGGERS, OUTCOMES, BELIEFS } from '@/domain/types';
 import { ImportError } from '@/domain/export/migrate';
-import type { ExportFileV1 } from '@/domain/export/format';
+import type { ExportFileV2 } from '@/domain/export/format';
 
 // Every `*At` field in the domain is documented as "ISO 8601 WITH timezone
 // offset". `Date.parse` alone is far too permissive — engines also accept
@@ -37,6 +37,7 @@ const nonEmptyString = z.string().check(z.minLength(1, 'must not be empty'));
 
 const triggerSchema = z.enum(TRIGGERS);
 const outcomeSchema = z.enum(OUTCOMES);
+const beliefSchema = z.enum(BELIEFS);
 
 const quitProfileSchema = z.object({
   id: z.literal('singleton'),
@@ -62,6 +63,34 @@ const cravingSessionSchema = z.object({
   roundCount: z.optional(z.int().check(z.gte(1))),
   preQuit: z.optional(z.boolean()),
   notes: z.optional(z.string()),
+  beliefId: z.optional(beliefSchema),
+});
+
+// strength is 0–4 and 0 ("seen through") is a real, meaningful value — do NOT
+// copy the 1–10 intensity pattern above, whose floor is 1. Spelled as the
+// literal set rather than int + gte(0)/lte(4) because the domain declares
+// `strength: 0 | 1 | 2 | 3 | 4`, and only the literal set parses to that union
+// (a `number` output would not be assignable to `BeliefAssessment`). Same
+// accept/reject behaviour: 0 in, 5 / -1 / 2.5 out.
+const beliefAssessmentSchema = z.object({
+  id: nonEmptyString,
+  beliefId: beliefSchema,
+  assessedAt: dateString,
+  strength: z.literal([0, 1, 2, 3, 4]),
+  context: z.enum(['brain', 'exercise', 'craving']),
+  trigger: z.optional(triggerSchema),
+});
+
+// endedAt is REQUIRED: freedom sessions are written once, at completion, so a
+// row without an end is a corrupt row, not an in-progress one.
+const freedomSessionSchema = z.object({
+  id: nonEmptyString,
+  startedAt: dateString,
+  endedAt: dateString,
+  kind: z.enum(['brain', 'exercise']),
+  beliefId: z.optional(beliefSchema),
+  trigger: z.optional(triggerSchema),
+  lessonId: z.optional(nonEmptyString),
 });
 
 const achievementUnlockSchema = z.object({
@@ -91,8 +120,10 @@ const preferencesSchema = z.object({
   updatedAt: dateString,
 });
 
-const exportFileV1Schema = z.object({
-  schemaVersion: z.literal(1),
+// Only the CURRENT version is validated: `validateExportFile` runs after
+// `migrateToLatest`, so anything older has already been upgraded in place.
+const exportFileV2Schema = z.object({
+  schemaVersion: z.literal(2),
   app: z.literal('quit-smoking'),
   exportedAt: dateString,
   profile: z.nullable(quitProfileSchema),
@@ -100,10 +131,12 @@ const exportFileV1Schema = z.object({
   achievementUnlocks: z.array(achievementUnlockSchema),
   reasons: z.array(personalReasonSchema),
   preferences: z.nullable(preferencesSchema),
+  beliefAssessments: z.array(beliefAssessmentSchema),
+  freedomSessions: z.array(freedomSessionSchema),
 });
 
-export function validateExportFile(migrated: unknown): ExportFileV1 {
-  const result = exportFileV1Schema.safeParse(migrated);
+export function validateExportFile(migrated: unknown): ExportFileV2 {
+  const result = exportFileV2Schema.safeParse(migrated);
   if (!result.success) {
     const [firstIssue] = result.error.issues;
     const path = firstIssue.path.length > 0 ? firstIssue.path.join('.') : '(root)';

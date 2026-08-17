@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { mergeSnapshots } from '@/domain/export/merge';
 import type { ExportSnapshot } from '@/domain/export/format';
-import type { CravingSession, PersonalReason, AchievementUnlock, QuitProfile } from '@/domain/types';
+import type {
+  CravingSession,
+  PersonalReason,
+  AchievementUnlock,
+  QuitProfile,
+  BeliefAssessment,
+  FreedomSession,
+} from '@/domain/types';
 
 function craving(overrides: Partial<CravingSession> = {}): CravingSession {
   return {
@@ -40,6 +47,27 @@ function profile(overrides: Partial<QuitProfile> = {}): QuitProfile {
   };
 }
 
+function assessment(overrides: Partial<BeliefAssessment> = {}): BeliefAssessment {
+  return {
+    id: 'ba1',
+    beliefId: 'relaxation',
+    assessedAt: '2026-01-01T08:00:00Z',
+    strength: 3,
+    context: 'brain',
+    ...overrides,
+  };
+}
+
+function freedomSession(overrides: Partial<FreedomSession> = {}): FreedomSession {
+  return {
+    id: 'fs1',
+    startedAt: '2026-01-01T08:00:00Z',
+    endedAt: '2026-01-01T08:05:00Z',
+    kind: 'brain',
+    ...overrides,
+  };
+}
+
 function emptySnapshot(overrides: Partial<ExportSnapshot> = {}): ExportSnapshot {
   return {
     profile: null,
@@ -47,6 +75,8 @@ function emptySnapshot(overrides: Partial<ExportSnapshot> = {}): ExportSnapshot 
     achievementUnlocks: [],
     reasons: [],
     preferences: null,
+    beliefAssessments: [],
+    freedomSessions: [],
     ...overrides,
   };
 }
@@ -128,6 +158,122 @@ describe('mergeSnapshots — union with id-collision keeping current', () => {
     const sharedReason = merged.reasons.find((r) => r.id === 'shared');
     expect(sharedReason?.text).toBe('current text');
     expect(summary.newReasons).toBe(1);
+  });
+});
+
+describe('mergeSnapshots — belief assessments and freedom sessions', () => {
+  it('unions belief assessments from both sides when ids differ', () => {
+    const current = emptySnapshot({ beliefAssessments: [assessment({ id: 'a' })] });
+    const imported = emptySnapshot({ beliefAssessments: [assessment({ id: 'b' })] });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.beliefAssessments.map((a) => a.id).sort()).toEqual(['a', 'b']);
+    expect(summary.newBeliefAssessments).toBe(1);
+  });
+
+  it('on id collision, keeps the CURRENT belief assessment', () => {
+    const current = emptySnapshot({
+      beliefAssessments: [assessment({ id: 'shared', strength: 0 })],
+    });
+    const imported = emptySnapshot({
+      beliefAssessments: [assessment({ id: 'shared', strength: 4 }), assessment({ id: 'new' })],
+    });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.beliefAssessments).toHaveLength(2);
+    expect(merged.beliefAssessments.find((a) => a.id === 'shared')?.strength).toBe(0);
+    expect(summary.newBeliefAssessments).toBe(1);
+  });
+
+  it('unions freedom sessions from both sides when ids differ', () => {
+    const current = emptySnapshot({ freedomSessions: [freedomSession({ id: 'a' })] });
+    const imported = emptySnapshot({ freedomSessions: [freedomSession({ id: 'b' })] });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.freedomSessions.map((s) => s.id).sort()).toEqual(['a', 'b']);
+    expect(summary.newFreedomSessions).toBe(1);
+  });
+
+  it('on id collision, keeps the CURRENT freedom session', () => {
+    const current = emptySnapshot({
+      freedomSessions: [freedomSession({ id: 'shared', lessonId: 'device' })],
+    });
+    const imported = emptySnapshot({
+      freedomSessions: [
+        freedomSession({ id: 'shared', lessonId: 'imported' }),
+        freedomSession({ id: 'new' }),
+      ],
+    });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.freedomSessions).toHaveLength(2);
+    expect(merged.freedomSessions.find((s) => s.id === 'shared')?.lessonId).toBe('device');
+    expect(summary.newFreedomSessions).toBe(1);
+  });
+
+  it('counts zero new rows when both sides are empty', () => {
+    const { summary } = mergeSnapshots(emptySnapshot(), emptySnapshot());
+    expect(summary.newBeliefAssessments).toBe(0);
+    expect(summary.newFreedomSessions).toBe(0);
+  });
+
+  it('sorts merged belief assessments by assessedAt ascending', () => {
+    const current = emptySnapshot({
+      beliefAssessments: [assessment({ id: 'late', assessedAt: '2026-01-03T08:00:00Z' })],
+    });
+    const imported = emptySnapshot({
+      beliefAssessments: [
+        assessment({ id: 'early', assessedAt: '2026-01-01T08:00:00Z' }),
+        assessment({ id: 'mid', assessedAt: '2026-01-02T08:00:00Z' }),
+      ],
+    });
+
+    const { merged } = mergeSnapshots(current, imported);
+    expect(merged.beliefAssessments.map((a) => a.id)).toEqual(['early', 'mid', 'late']);
+  });
+
+  it('sorts merged freedom sessions by startedAt ascending, comparing instants across offsets', () => {
+    const current = emptySnapshot({
+      // 2026-01-01T09:00:00+02:00 is 07:00Z — EARLIER than 08:00Z despite the
+      // larger wall-clock hour. Sorting by string would get this backwards.
+      freedomSessions: [
+        freedomSession({
+          id: 'earlier-instant',
+          startedAt: '2026-01-01T09:00:00+02:00',
+          endedAt: '2026-01-01T09:05:00+02:00',
+        }),
+      ],
+    });
+    const imported = emptySnapshot({
+      freedomSessions: [freedomSession({ id: 'later-instant', startedAt: '2026-01-01T08:00:00Z' })],
+    });
+
+    const { merged } = mergeSnapshots(current, imported);
+    expect(merged.freedomSessions.map((s) => s.id)).toEqual(['earlier-instant', 'later-instant']);
+  });
+
+  it('never mutates either side’s new collections', () => {
+    const current = emptySnapshot({
+      beliefAssessments: [assessment({ id: 'a' })],
+      freedomSessions: [freedomSession({ id: 'a' })],
+    });
+    const imported = emptySnapshot({
+      beliefAssessments: [assessment({ id: 'b' })],
+      freedomSessions: [freedomSession({ id: 'b' })],
+    });
+    const currentClone = JSON.parse(JSON.stringify(current));
+    const importedClone = JSON.parse(JSON.stringify(imported));
+
+    const { merged } = mergeSnapshots(current, imported);
+    merged.beliefAssessments.push(assessment({ id: 'mutated' }));
+    merged.freedomSessions.push(freedomSession({ id: 'mutated' }));
+
+    expect(current).toEqual(currentClone);
+    expect(imported).toEqual(importedClone);
   });
 });
 

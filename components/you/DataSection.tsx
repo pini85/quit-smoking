@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ChangeEvent } from 'react';
 import type { CravingSession, Preferences } from '@/domain/types';
-import type { ExportFileV1 } from '@/domain/export/format';
+import type { ExportFileV2 } from '@/domain/export/format';
 import type { MergeSummary } from '@/domain/export/merge';
 import { ImportError } from '@/domain/export/migrate';
 import { exportData, previewImport, applyImport } from '@/lib/persistence/exportImport';
@@ -51,7 +51,7 @@ function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
 }
 
-type PendingImport = { file: ExportFileV1; summary: MergeSummary };
+type PendingImport = { file: ExportFileV2; summary: MergeSummary };
 
 /**
  * Export/import UI. `previewImport` never writes (see its own docs); only

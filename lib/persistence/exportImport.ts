@@ -7,7 +7,7 @@
  * corrupt file can never reach a write.
  */
 
-import { buildExportFile, exportFileName, type ExportFileV1, type ExportSnapshot } from '@/domain/export/format';
+import { buildExportFile, exportFileName, type ExportFileV2, type ExportSnapshot } from '@/domain/export/format';
 import { migrateToLatest, ImportError } from '@/domain/export/migrate';
 import { mergeSnapshots, type MergeSummary } from '@/domain/export/merge';
 import { validateExportFile } from '@/lib/validation/importSchemas';
@@ -26,13 +26,15 @@ export async function exportData(
   };
 }
 
-function fileToSnapshot(file: ExportFileV1): ExportSnapshot {
+function fileToSnapshot(file: ExportFileV2): ExportSnapshot {
   return {
     profile: file.profile,
     cravings: file.cravings,
     achievementUnlocks: file.achievementUnlocks,
     reasons: file.reasons,
     preferences: file.preferences,
+    beliefAssessments: file.beliefAssessments,
+    freedomSessions: file.freedomSessions,
   };
 }
 
@@ -42,6 +44,8 @@ const EMPTY_SNAPSHOT: ExportSnapshot = {
   achievementUnlocks: [],
   reasons: [],
   preferences: null,
+  beliefAssessments: [],
+  freedomSessions: [],
 };
 
 /**
@@ -51,7 +55,7 @@ const EMPTY_SNAPSHOT: ExportSnapshot = {
 export async function previewImport(
   repos: Repositories,
   rawText: string
-): Promise<{ file: ExportFileV1; summary: MergeSummary }> {
+): Promise<{ file: ExportFileV2; summary: MergeSummary }> {
   let raw: unknown;
   try {
     raw = JSON.parse(rawText);
@@ -76,34 +80,19 @@ export async function previewImport(
  */
 export async function applyImport(
   repos: Repositories,
-  file: ExportFileV1,
+  file: ExportFileV2,
   mode: 'merge' | 'replace'
 ): Promise<MergeSummary> {
   const importedSnapshot = fileToSnapshot(file);
 
   if (mode === 'replace') {
     const { summary } = mergeSnapshots(EMPTY_SNAPSHOT, importedSnapshot);
-    // TODO(export v2): DELETE this override when the export format learns the
-    // two new keys — leaving it will silently drop every imported belief
-    // assessment and freedom session, with no type error to catch it. Today
-    // the format carries neither, so they are absent from `importedSnapshot`
-    // and `replace` ("discard current data entirely") writes them empty.
-    await repos.replaceAll({ ...importedSnapshot, beliefAssessments: [], freedomSessions: [] });
+    await repos.replaceAll(importedSnapshot);
     return summary;
   }
 
   const current = await repos.readSnapshot();
   const { merged, summary } = mergeSnapshots(current, importedSnapshot);
-  // TODO(export v2): DELETE these two overrides when `mergeSnapshots` learns
-  // the new keys — once `merged` carries correctly-unioned belief rows, these
-  // lines will silently discard every imported one, and nothing will fail to
-  // compile. They exist only because the format is blind to both stores
-  // today: `merge` must never destroy device data the imported file simply
-  // doesn't know about, so the device's own rows are carried through.
-  await repos.replaceAll({
-    ...merged,
-    beliefAssessments: current.beliefAssessments,
-    freedomSessions: current.freedomSessions,
-  });
+  await repos.replaceAll(merged);
   return summary;
 }

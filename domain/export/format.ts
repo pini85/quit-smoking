@@ -13,9 +13,19 @@ import type {
   AchievementUnlock,
   PersonalReason,
   Preferences,
+  BeliefAssessment,
+  FreedomSession,
 } from '@/domain/types';
 
-export interface ExportSnapshot {
+/**
+ * FROZEN. The exact set of collections a schemaVersion-1 file carries.
+ *
+ * Historical versions get their own snapshot type and are never edited again:
+ * a v1 file on someone's disk does not change because the app grew. Growing
+ * the live `ExportSnapshot` in place would silently redefine what "v1" means
+ * and let a v2-only field leak into the v1 type with no compile error.
+ */
+export interface ExportSnapshotV1 {
   profile: QuitProfile | null;
   cravings: CravingSession[];
   achievementUnlocks: AchievementUnlock[];
@@ -23,18 +33,34 @@ export interface ExportSnapshot {
   preferences: Preferences | null;
 }
 
-export const CURRENT_EXPORT_VERSION = 1 as const;
+/**
+ * The CURRENT snapshot shape (v2). Structurally identical to
+ * `lib/persistence/repositories.Snapshot` — see the module doc above.
+ */
+export interface ExportSnapshot extends ExportSnapshotV1 {
+  beliefAssessments: BeliefAssessment[];
+  freedomSessions: FreedomSession[];
+}
 
-export interface ExportFileV1 extends ExportSnapshot {
+export const CURRENT_EXPORT_VERSION = 2 as const;
+
+export interface ExportFileV1 extends ExportSnapshotV1 {
   schemaVersion: 1;
   app: 'quit-smoking';
   exportedAt: string;
 }
 
-// Union grows with future versions (e.g. `ExportFileV1 | ExportFileV2`).
-export type AnyExportFile = ExportFileV1;
+export interface ExportFileV2 extends ExportSnapshot {
+  schemaVersion: 2;
+  app: 'quit-smoking';
+  exportedAt: string;
+}
 
-export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): ExportFileV1 {
+// Every version this app can be handed. Only the newest is ever WRITTEN;
+// older members exist so migrations have something to name.
+export type AnyExportFile = ExportFileV1 | ExportFileV2;
+
+export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): ExportFileV2 {
   return {
     schemaVersion: CURRENT_EXPORT_VERSION,
     app: 'quit-smoking',
@@ -44,6 +70,8 @@ export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): E
     achievementUnlocks: snapshot.achievementUnlocks,
     reasons: snapshot.reasons,
     preferences: snapshot.preferences,
+    beliefAssessments: snapshot.beliefAssessments,
+    freedomSessions: snapshot.freedomSessions,
   };
 }
 

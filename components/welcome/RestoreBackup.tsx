@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent } from 'react';
-import type { ExportFileV1 } from '@/domain/export/format';
+import type { ExportFileV2 } from '@/domain/export/format';
 import { ImportError } from '@/domain/export/migrate';
 import { applyImport, previewImport } from '@/lib/persistence/exportImport';
 import { getAppRepositories } from '@/lib/services/appDb';
@@ -16,7 +16,7 @@ function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
 }
 
-function countLine(file: ExportFileV1): string {
+function countLine(file: ExportFileV2): string {
   const parts = [
     `${file.cravings.length} craving${file.cravings.length === 1 ? '' : 's'}`,
     `${file.reasons.length} reason${file.reasons.length === 1 ? '' : 's'}`,
@@ -40,7 +40,7 @@ function countLine(file: ExportFileV1): string {
 export function RestoreBackup({ store }: RestoreBackupProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<ExportFileV1 | null>(null);
+  const [pending, setPending] = useState<ExportFileV2 | null>(null);
   const [restoring, setRestoring] = useState(false);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {

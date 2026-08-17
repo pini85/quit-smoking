@@ -1,9 +1,10 @@
 /**
  * Version detection + migration chain for import files. Pure — no I/O.
  *
- * Each entry in MIGRATIONS[v] upgrades a file from version v to v+1. Empty
- * today (only CURRENT_EXPORT_VERSION = 1 exists); a future v1 -> v2 change
- * ships as MIGRATIONS[1].
+ * Each entry in MIGRATIONS[v] upgrades a file from version v to v+1. A future
+ * v2 -> v3 change ships as MIGRATIONS[2], in the SAME change-set as the
+ * format/validator bump — a version the writer emits but no migration or
+ * validator understands is an unreadable backup.
  */
 
 import { CURRENT_EXPORT_VERSION } from '@/domain/export/format';
@@ -18,7 +19,13 @@ export class ImportError extends Error {
 export const MIGRATIONS: Record<
   number,
   (file: Record<string, unknown>) => Record<string, unknown>
-> = {};
+> = {
+  // v1 -> v2: the Freedom feature added belief assessments and freedom
+  // sessions. A v1 file predates both, so the honest upgrade is two empty
+  // collections — never invented rows. Returns a new object; the caller's
+  // file is not mutated.
+  1: (file) => ({ ...file, schemaVersion: 2, beliefAssessments: [], freedomSessions: [] }),
+};
 
 export function detectVersion(raw: unknown): number {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {

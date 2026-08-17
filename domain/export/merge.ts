@@ -9,6 +9,8 @@ export interface MergeSummary {
   newCravings: number;
   newUnlocks: number;
   newReasons: number;
+  newBeliefAssessments: number;
+  newFreedomSessions: number;
   totalCravingsAfter: number;
   profileAdopted: boolean;
 }
@@ -59,8 +61,19 @@ export function mergeSnapshots(
     imported.reasons
   );
 
+  const { merged: mergedAssessmentsUnsorted, newCount: newBeliefAssessments } =
+    unionKeepingCurrent(current.beliefAssessments, imported.beliefAssessments);
+  const { merged: mergedFreedomUnsorted, newCount: newFreedomSessions } = unionKeepingCurrent(
+    current.freedomSessions,
+    imported.freedomSessions
+  );
+
   const mergedCravings = sortByIsoField(mergedCravingsUnsorted, (c) => c.startedAt);
   const mergedReasons = sortByIsoField(mergedReasonsUnsorted, (r) => r.createdAt);
+  // Both are read back as time series (the belief map compares instants, not
+  // strings, because offsets differ), so re-sort after the union the same way.
+  const mergedBeliefAssessments = sortByIsoField(mergedAssessmentsUnsorted, (a) => a.assessedAt);
+  const mergedFreedomSessions = sortByIsoField(mergedFreedomUnsorted, (s) => s.startedAt);
 
   const profileAdopted = current.profile === null && imported.profile !== null;
   const mergedProfile = current.profile ?? (profileAdopted ? imported.profile : null);
@@ -71,12 +84,16 @@ export function mergeSnapshots(
     achievementUnlocks: mergedUnlocks,
     reasons: mergedReasons,
     preferences: current.preferences,
+    beliefAssessments: mergedBeliefAssessments,
+    freedomSessions: mergedFreedomSessions,
   };
 
   const summary: MergeSummary = {
     newCravings,
     newUnlocks,
     newReasons,
+    newBeliefAssessments,
+    newFreedomSessions,
     totalCravingsAfter: mergedCravings.length,
     profileAdopted,
   };
