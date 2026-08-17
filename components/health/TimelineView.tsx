@@ -3,10 +3,11 @@
 import { useState } from 'react';
 import type { HealthMilestone } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
-import { TIME_BANDS, currentBandId, groupByTimeBand } from '@/domain/milestones/engine';
+import { TIME_BANDS, bandOf, currentBandId, groupByTimeBand } from '@/domain/milestones/engine';
 import { hoursBetween } from '@/domain/time';
 import { humanizeEta } from '@/components/home/humanizeEta';
 import { Card } from '@/components/ui/Card';
+import { filterEmerging } from './filterEmerging';
 import { TimelineRow } from './MilestoneRows';
 
 const HOUR_MS = 3_600_000;
@@ -19,18 +20,24 @@ export type TimelineViewProps = {
   onOpenMilestone: (milestone: HealthMilestone) => void;
 };
 
+/** Delegates to the engine's own band assignment rather than reimplementing
+ *  the boundary walk, so this never drifts if TIME_BANDS changes. */
 function bandLabelOf(m: HealthMilestone): string {
-  if (m.timing.kind === 'noTimeline') return 'no fixed timing';
-  for (const band of TIME_BANDS) {
-    if (m.timing.earliestHours <= band.untilHours) return band.label;
-  }
-  return TIME_BANDS[TIME_BANDS.length - 1].label;
+  const id = bandOf(m);
+  if (id === null) return 'no fixed timing';
+  return TIME_BANDS.find((band) => band.id === id)?.label ?? 'no fixed timing';
 }
 
 /**
  * Honest, light collection — no points, no streaks, nothing gamified. Just a
  * running tally of the "did you know" facts that have started applying to
  * you, with the rest left as an unlabelled '???' until their time comes.
+ *
+ * `states` is expected pre-filtered by `filterEmerging` (see `TimelineView`
+ * below), so both `total` and `found` are implicitly gated by
+ * `showEmergingEvidence` too — an emerging didYouKnow entry would count
+ * toward neither denominator nor numerator when the preference is off.
+ * Currently moot: no `didYouKnow` entry in the dataset is `emerging`.
  */
 function DiscoveriesCard({
   states,
@@ -173,9 +180,7 @@ export function TimelineView({
   now,
   onOpenMilestone,
 }: TimelineViewProps) {
-  const visible = showEmergingEvidence
-    ? states
-    : states.filter((s) => s.milestone.evidenceLevel !== 'emerging');
+  const visible = filterEmerging(states, showEmergingEvidence);
 
   const elapsedH = hoursBetween(quitAt, now);
   const current = currentBandId(quitAt, now);

@@ -3,6 +3,7 @@ import { MILESTONE_CATEGORIES, type MilestoneCategory } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
 import { categoryProgress } from '@/domain/milestones/engine';
 import { CATEGORY_META } from './categoryMeta';
+import { filterEmerging } from './filterEmerging';
 
 export type BodyExplorerViewProps = {
   states: MilestoneState[];
@@ -39,11 +40,14 @@ function CategoryTile({
 /**
  * The full body map — every category, whether or not anything is happening
  * there yet, so the explorer works as a reference as much as a dashboard.
+ *
+ * `categoryProgress`'s `total`/`achieved`/`happeningNow` counts are computed
+ * from the emerging-filtered list, so a category's "{k} of {n}" caption is
+ * also implicitly gated by `showEmergingEvidence` (an emerging milestone
+ * in a category counts toward neither number when the preference is off).
  */
 export function BodyExplorerView({ states, showEmergingEvidence }: BodyExplorerViewProps) {
-  const visible = showEmergingEvidence
-    ? states
-    : states.filter((s) => s.milestone.evidenceLevel !== 'emerging');
+  const visible = filterEmerging(states, showEmergingEvidence);
 
   const progress = categoryProgress(visible);
 

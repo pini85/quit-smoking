@@ -4,6 +4,7 @@ import type { HealthMilestone } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
 import { happeningNow, recentlyAchieved, upcomingSoon } from '@/domain/milestones/engine';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { filterEmerging } from './filterEmerging';
 import { FullMilestoneCard } from './MilestoneCard';
 import { CompactAchievedRow, CompactUpcomingCard } from './MilestoneRows';
 
@@ -26,9 +27,7 @@ export function RightNowView({
   preQuit,
   onOpenMilestone,
 }: RightNowViewProps) {
-  const visible = showEmergingEvidence
-    ? states
-    : states.filter((s) => s.milestone.evidenceLevel !== 'emerging');
+  const visible = filterEmerging(states, showEmergingEvidence);
 
   const now = happeningNow(visible);
   const soon = upcomingSoon(visible, 2);

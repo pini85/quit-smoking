@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CATEGORY_META } from '@/components/health/categoryMeta';
+import { filterEmerging } from '@/components/health/filterEmerging';
 
 export type BodyNowCarouselProps = {
   states: MilestoneState[];
@@ -104,9 +105,7 @@ export function BodyNowCarousel({
   showEmergingEvidence,
   onOpenMilestone,
 }: BodyNowCarouselProps) {
-  const visible = showEmergingEvidence
-    ? states
-    : states.filter((s) => s.milestone.evidenceLevel !== 'emerging');
+  const visible = filterEmerging(states, showEmergingEvidence);
 
   const live = happeningNow(visible).slice(0, 3);
   const startingSoon = live.length === 0;
