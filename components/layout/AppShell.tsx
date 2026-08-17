@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { TabBar } from './TabBar';
+import { UpdateToast } from './UpdateToast';
 import { SessionRecovery } from '@/components/craving/SessionRecovery';
 
 /** Full-bleed, single-purpose routes: no tab bar to pull attention away. */
@@ -27,6 +28,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mounted here rather than inside AppGate so it survives every route
           change; it no-ops on /craving, where the session is still live. */}
       <SessionRecovery />
+      {/* Always mounted so the service worker registers on any entry route;
+          the banner itself stays out of the way on the immersive ones. */}
+      <UpdateToast suppressed={immersive} />
     </>
   );
 }

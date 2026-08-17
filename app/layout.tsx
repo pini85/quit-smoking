@@ -20,6 +20,22 @@ export const metadata: Metadata = {
   title: "Unsmoke",
   description: "Private, local-first quit-smoking companion",
   applicationName: "Unsmoke",
+  // Installed-to-home-screen behaviour on iOS, which reads none of the web
+  // app manifest: `capable` drops Safari's chrome, and the translucent status
+  // bar lets the canvas run under it (the layout already pads for
+  // `env(safe-area-inset-top)`).
+  appleWebApp: {
+    capable: true,
+    title: "Unsmoke",
+    statusBarStyle: "black-translucent",
+  },
+  // Declaring `icons` at all replaces the `app/icon.svg` file convention's
+  // auto-emitted tag, so `icon` has to be restated here alongside the
+  // apple-touch raster iOS needs (it will not use an SVG).
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {
