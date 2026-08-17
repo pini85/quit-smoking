@@ -18,8 +18,17 @@ export function Sparkline(props: SparklineProps) {
   const pad = 5;
   const count = data.length;
 
-  const min = count > 0 ? Math.min(...data) : 0;
-  const max = count > 0 ? Math.max(...data) : 0;
+  const rawMin = count > 0 ? Math.min(...data) : 0;
+  const rawMax = count > 0 ? Math.max(...data) : 0;
+
+  // Mirrors `TrendLine`'s flat-series handling: with a zero span every point
+  // otherwise maps to the bottom edge, which reads as "collapsed to nothing"
+  // rather than "steady". Padding an all-equal series symmetrically puts the
+  // line at mid-height instead. Varying series keep the full plot height.
+  const rawSpan = rawMax - rawMin;
+  const padding = rawSpan === 0 ? Math.max(1, Math.abs(rawMax) * 0.1) : 0;
+  const min = rawMin - padding;
+  const max = rawMax + padding;
   const span = max - min || 1;
 
   const xAt = (index: number) =>

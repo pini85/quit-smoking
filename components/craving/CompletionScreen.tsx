@@ -15,7 +15,7 @@ export type CompletionScreenProps = {
   onDone: () => void;
 };
 
-const WIN_LINE = "That loop just got weaker. It's physiology, not luck.";
+const WIN_LINE = 'That loop just got weaker. It’s physiology, not luck.';
 const LOGGED_LINE = 'Logged. Stepping away is a real strategy — it passes either way.';
 
 /**

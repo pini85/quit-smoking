@@ -227,6 +227,19 @@ describe('formatSmokeFreeDuration', () => {
     expect(formatSmokeFreeDuration(quitAt, now)).toEqual({ primary: '1 year, 1 month' });
   });
 
+  it('a whole calendar decade reads "10 years", not "9 years, 12 months"', () => {
+    // 3652 days = ten calendar years including two leap days. 365.25-day
+    // years leave a remainder that rounds to twelve months, which has to
+    // carry into the year rather than being printed.
+    const { quitAt, now } = at(3652 * 86_400_000);
+    expect(formatSmokeFreeDuration(quitAt, now)).toEqual({ primary: '10 years' });
+  });
+
+  it('a whole calendar 30 years reads "30 years"', () => {
+    const { quitAt, now } = at(10_957 * 86_400_000);
+    expect(formatSmokeFreeDuration(quitAt, now)).toEqual({ primary: '30 years' });
+  });
+
   it('clamps a negative span to zero (now before quitAt)', () => {
     const quitAt = new Date(10_000);
     const now = new Date(0);

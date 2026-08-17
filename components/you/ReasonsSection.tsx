@@ -64,7 +64,7 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
       </div>
 
       {reasons.length === 0 ? (
-        <p className="text-[13px] text-ink-faint">No reasons yet — add one below.</p>
+        <p className="text-[13px] text-ink-muted">No reasons yet — add one below.</p>
       ) : (
         <ul className="flex flex-col">
           {reasons.map((reason) => (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 
 export type RingPulseProps = {
   /**
@@ -17,6 +18,11 @@ const CLEANUP_MS = 1200;
 export function RingPulse({ trigger, className }: RingPulseProps) {
   const lastTrigger = useRef(trigger);
   const [pulseKey, setPulseKey] = useState<number | null>(null);
+  // `globals.css` zeroes the animation duration under reduced motion, which
+  // would otherwise leave the ring parked at full opacity for the whole
+  // cleanup window and then blink out. A pulse that cannot expand is not
+  // worth drawing at all, so render nothing.
+  const reducedMotion = useReducedMotion();
 
   useEffect(() => {
     if (trigger === lastTrigger.current) return;
@@ -30,7 +36,7 @@ export function RingPulse({ trigger, className }: RingPulseProps) {
     return () => clearTimeout(timer);
   }, [pulseKey]);
 
-  if (pulseKey === null) return null;
+  if (pulseKey === null || reducedMotion) return null;
 
   return (
     <span

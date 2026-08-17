@@ -140,7 +140,7 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
             />
             <DetailRow
               label="Trigger"
-              value={selected.trigger ? TRIGGER_META[selected.trigger].label : 'Untagged'}
+              value={selected.trigger ? TRIGGER_META[selected.trigger].label : 'untagged'}
             />
             <DetailRow
               label="Interventions used"

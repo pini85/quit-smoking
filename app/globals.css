@@ -16,7 +16,10 @@
   /* Text */
   --ink: oklch(0.24 0.02 200);
   --ink-muted: oklch(0.5 0.02 200);
-  --ink-faint: oklch(0.65 0.015 200);
+  /* 0.62, not 0.65: at 0.65 faint text fell under 3:1 against the soft
+     primary/accent fills it sits on. It is still a clear step below
+     `--ink-muted` and is only ever used for supporting text. */
+  --ink-faint: oklch(0.62 0.015 200);
 
   /* Brand */
   --primary: oklch(0.52 0.1 183);
@@ -59,7 +62,7 @@
 
     --ink: oklch(0.94 0.008 100);
     --ink-muted: oklch(0.7 0.012 150);
-    --ink-faint: oklch(0.52 0.012 150);
+    --ink-faint: oklch(0.57 0.012 150);
 
     --primary: oklch(0.72 0.11 178);
     --primary-strong: oklch(0.8 0.11 178);
@@ -213,12 +216,15 @@ body {
     --ring-breathe-scale: 1;
   }
 
-  /* These rules are unlayered, so they beat Tailwind's utility layer. */
+  /* These rules are unlayered, so they beat Tailwind's utility layer.
+     `animate-pulse` is Tailwind's own (used by the loading skeletons) and
+     is NOT duration-token driven, so it has to be named here too. */
   .animate-fab-breathe,
   .animate-ring-pulse,
   .animate-fade-in,
   .animate-sheet-up,
-  .animate-craving-wave {
+  .animate-craving-wave,
+  .animate-pulse {
     animation: none;
   }
 

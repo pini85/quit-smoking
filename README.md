@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Unsmoke
 
-## Getting Started
+A private, local-first quit-smoking companion. It gives you six things: a live
+count of how long you have been smoke-free, a three-minute craving flow you can
+reach from any screen, an evidence-linked map of what your body is recovering,
+proof drawn from your own logged cravings, and a place to keep the reasons you
+started.
 
-First, run the development server:
+Nothing in it is guesswork dressed up as a fact. Every health milestone carries
+its evidence level and its source, every derived number can be tapped to see
+exactly how it was calculated, and a craving that ended in a cigarette is
+recorded in the same neutral voice as one that did not.
+
+## Privacy
+
+There is no account, no server, and no analytics. Every byte the app holds —
+your profile, your cravings, your reasons — lives in IndexedDB on your own
+device and is never transmitted anywhere. The app has no network calls at
+runtime beyond loading its own static assets, and it works fully offline once
+installed. The export file you can produce from the You screen is your only
+backup; if you clear the browser's storage or lose the device, the data is
+gone, because there is nowhere else it exists.
+
+## Development
+
+Requires Node 20+ and pnpm.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev        # dev server on http://localhost:3000
+pnpm test       # vitest — domain and persistence suites
+pnpm typecheck  # tsc --noEmit
+pnpm lint       # eslint
+pnpm build      # next build (static export to out/) + service worker generation
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`pnpm build` runs `next build` followed by `scripts/generate-sw.mjs`, which
+rewrites `lib/service-worker.js` into `out/sw.js` with a real precache manifest
+and a content-derived cache version. Running `next build` on its own produces
+an `out/` without a working service worker, so always build through the script.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To preview the production output the way it is actually served:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+pnpm build && python3 -m http.server 8123 -d out
+```
 
-## Learn More
+## Deployment
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Static export, no runtime. `netlify.toml` builds with `pnpm build`, publishes
+`out/`, serves `/sw.js` with `no-cache` so updates are picked up promptly, and
+serves `/_next/static/*` immutably. Any static host with those two cache rules
+will do.

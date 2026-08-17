@@ -44,6 +44,19 @@ function progressTowardNext(elapsedHours: number, nextHours: number | null): num
 }
 
 /**
+ * `formatDurationDigital` grows a character per decade of days, and the ring
+ * gives the readout ~232px. At 40px a tabular digit is ~24px wide, so once
+ * the string passes 11 characters (100+ days elapsed, which a long-quit user
+ * reaches permanently) it no longer fits and would wrap mid-number. Stepping
+ * the size down keeps it on one line out to a 27-year quit and beyond.
+ */
+function digitalSizeClass(text: string): string {
+  if (text.length <= 11) return 'text-[40px]';
+  if (text.length <= 13) return 'text-[32px]';
+  return 'text-[26px]';
+}
+
+/**
  * The screen's centre of gravity: one ring, one number, and the next thing
  * your body is about to do.
  *
@@ -79,6 +92,7 @@ export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
 
   const stage = recoveryStage(quitAt, now);
   const smokeFree = formatSmokeFreeDuration(quitAt, now);
+  const digital = formatDurationDigital(preQuit ? quitAtMs - nowMs : elapsedMs);
 
   return (
     <section className="flex flex-col items-center gap-4 pt-2">
@@ -110,14 +124,20 @@ export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
               <span className="px-6 text-[15px] leading-tight text-ink-muted">
                 Freedom starts in
               </span>
-              <span className="mt-2 text-[40px] font-semibold leading-none tabular-nums text-ink">
-                {formatDurationDigital(quitAtMs - nowMs)}
+              <span
+                className={`mt-2 font-semibold leading-none tabular-nums text-ink ${digitalSizeClass(digital)}`}
+              >
+                {digital}
               </span>
             </>
           ) : (
             <>
-              <span className="text-balance px-6 text-[40px] font-semibold leading-[1.05] tabular-nums text-ink">
-                {precise ? formatDurationDigital(elapsedMs) : smokeFree.primary}
+              <span
+                className={`text-balance px-6 font-semibold leading-[1.05] tabular-nums text-ink ${
+                  precise ? digitalSizeClass(digital) : 'text-[40px]'
+                }`}
+              >
+                {precise ? digital : smokeFree.primary}
               </span>
               {!precise && smokeFree.secondary ? (
                 <span className="mt-2 text-[13px] leading-tight tabular-nums text-ink-muted">

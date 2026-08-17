@@ -78,7 +78,7 @@ function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
       href={tab.href}
       aria-current={active ? 'page' : undefined}
       className={`flex h-16 flex-1 flex-col items-center justify-center gap-1 transition-colors duration-[var(--dur-press)] ${
-        active ? 'text-primary-strong' : 'text-ink-faint'
+        active ? 'text-primary-strong' : 'text-ink-muted'
       }`}
     >
       {tab.icon}

@@ -8,6 +8,7 @@ import {
   cigarettesAvoided,
   moneySaved,
 } from '@/domain/stats/quitStats';
+import { formatCount } from '@/components/formatCount';
 import { formatMoney } from './formatMoney';
 
 export type MethodologySheetProps = {
@@ -40,7 +41,7 @@ export function MethodologySheet({ open, onClose, profile, now }: MethodologyShe
       <div className="flex flex-col gap-5 pb-2">
         <Row heading="Cigarettes not smoked">
           You told us you smoked {profile.cigarettesPerDay} a day. We multiply that by
-          how long you&rsquo;ve been smoke-free and round down — so far, {avoided}.
+          how long you&rsquo;ve been smoke-free and round down — so far, {formatCount(avoided)}.
         </Row>
 
         <Row heading="Money saved">
@@ -52,8 +53,8 @@ export function MethodologySheet({ open, onClose, profile, now }: MethodologyShe
 
         <Row heading="Life regained">
           Research from UCL (2024) estimates each cigarette costs roughly 17–22 minutes of
-          life. We use {MINUTES_OF_LIFE_PER_CIGARETTE} minutes — the middle of that range
-          — multiplied by the cigarettes you haven&rsquo;t smoked. It&rsquo;s a
+          life. We use {MINUTES_OF_LIFE_PER_CIGARETTE} minutes, near the middle of that
+          range, multiplied by the cigarettes you haven&rsquo;t smoked. It&rsquo;s a
           population average, not a promise about your particular body.
         </Row>
 

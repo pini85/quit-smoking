@@ -90,7 +90,7 @@ function AchievementTile({
     <div className="flex min-h-[104px] flex-col justify-between gap-2 rounded-card border border-border bg-surface p-3 text-left">
       <span className="text-[13px] font-semibold leading-snug text-ink-muted">{def.title}</span>
       <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] leading-snug text-ink-faint">{criteriaText(def.condition)}</span>
+        <span className="text-[11px] leading-snug text-ink-muted">{criteriaText(def.condition)}</span>
         <ProgressBar value={pct} className="h-1" />
       </div>
     </div>

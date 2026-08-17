@@ -137,9 +137,16 @@ export function formatSmokeFreeDuration(
   }
 
   const totalDaysFloat = ms / DAY_MS;
-  const years = Math.floor(totalDaysFloat / DAYS_PER_YEAR);
+  let years = Math.floor(totalDaysFloat / DAYS_PER_YEAR);
   const remainderDays = totalDaysFloat - years * DAYS_PER_YEAR;
-  const months = Math.round(remainderDays / DAYS_PER_MONTH);
+  let months = Math.round(remainderDays / DAYS_PER_MONTH);
+  // 365.25/30.44 is 12.0 minus a rounding hair, so a whole calendar decade
+  // leaves a remainder that rounds to a full twelve months. Without this
+  // carry, a 10-year anniversary reads "9 years, 12 months".
+  if (months >= 12) {
+    years += 1;
+    months = 0;
+  }
   const primary =
     months === 0
       ? pluralize(years, 'year')

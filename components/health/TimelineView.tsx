@@ -87,7 +87,7 @@ function DiscoveriesCard({
             </button>
           ))}
           {locked.map((s) => (
-            <p key={s.milestone.id} className="py-2 text-[13px] text-ink-faint">
+            <p key={s.milestone.id} className="py-2 text-[13px] text-ink-muted">
               ??? · {bandLabelOf(s.milestone)}
             </p>
           ))}

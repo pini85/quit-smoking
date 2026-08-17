@@ -36,6 +36,12 @@ export const metadata: Metadata = {
     icon: "/icon.svg",
     apple: "/icons/apple-touch-icon.png",
   },
+  // Next emits only the modern `mobile-web-app-capable` for `appleWebApp`.
+  // iOS before 17 reads solely the vendor-prefixed name, so without this the
+  // home-screen launch keeps Safari's chrome on older devices.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {

@@ -14,6 +14,11 @@ export type InsightsFeedProps = {
 
 const DAY_MS = 86_400_000;
 
+// Kept as a string constant (straight apostrophe) to match the other
+// empty/gated copies in this folder, which all live in `emptyCopy` props.
+const EMPTY_COPY =
+  "Nothing to say yet — and we won't invent anything. Insights here come only from your real data.";
+
 /**
  * Rotates through the FULL deterministic rule output (requested with
  * `limit: 99`, so effectively uncapped — there are only 7 rules) so a
@@ -38,10 +43,7 @@ export function InsightsFeed({ sessions, quitAt, now }: InsightsFeedProps) {
     <section className="flex flex-col gap-3">
       <h2 className="text-[17px] font-semibold tracking-tight text-ink">Insights</h2>
       {shown.length === 0 ? (
-        <EmptyState>
-          Nothing to say yet — and we won&rsquo;t invent anything. Insights here come only from
-          your real data.
-        </EmptyState>
+        <EmptyState>{EMPTY_COPY}</EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
           {shown.map((insight) => (

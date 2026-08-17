@@ -43,10 +43,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
     if (typeof indexedDB === 'undefined') {
       return new DataStore(
-        createInertRepositories(
-          'IndexedDB is unavailable in this environment. DataStore methods ' +
-            'must only be called from effects or event handlers, never during render.'
-        )
+        createInertRepositories('IndexedDB is unavailable in this environment.')
       );
     }
     return new DataStore(getAppRepositories());

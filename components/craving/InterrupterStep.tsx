@@ -134,7 +134,7 @@ export function InterrupterStep({
           <button
             type="button"
             onClick={() => setShowMore(true)}
-            className="mx-auto min-h-11 px-4 text-[15px] text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
+            className="mx-auto min-h-11 px-4 text-[15px] text-ink-muted transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
           >
             more ways &rarr;
           </button>

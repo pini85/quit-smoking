@@ -282,7 +282,7 @@ export const HEALTH_MILESTONES: HealthMilestone[] = [
     category: 'lungs',
     title: 'Your lungs\' self-cleaning escalator restarts within a month.',
     description: '63% showed significant improvement in mucociliary clearance after 1 month, 85% at 12 months.',
-    timing: { kind: 'window', earliestHours: 730, typicalUntilHours: 8766 },
+    timing: { kind: 'window', earliestHours: 730, typicalUntilHours: 8760 },
     evidenceLevel: 'strong',
     sources: [{ label: 'PubMed', url: 'https://pubmed.ncbi.nlm.nih.gov/27438569/' }],
     didYouKnow: true,

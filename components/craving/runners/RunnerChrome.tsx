@@ -47,7 +47,7 @@ export function RunnerChrome({ onBack, onSkip, children }: RunnerChromeProps) {
       <button
         type="button"
         onClick={onSkip}
-        className="mx-auto min-h-11 px-4 text-[15px] text-ink-faint underline-offset-4 transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
+        className="mx-auto min-h-11 px-4 text-[15px] text-ink-muted underline-offset-4 transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
       >
         skip to check-in
       </button>

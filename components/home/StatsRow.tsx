@@ -10,6 +10,7 @@ import {
 } from '@/domain/stats/quitStats';
 import { StatTile } from '@/components/ui/StatTile';
 import { Card } from '@/components/ui/Card';
+import { formatCount } from '@/components/formatCount';
 import { MethodologySheet } from './MethodologySheet';
 import { formatMoney } from './formatMoney';
 
@@ -36,7 +37,7 @@ export function StatsRow({ profile, now, moneyEquivalents }: StatsRowProps) {
     <>
       <Card className="grid grid-cols-3 gap-2">
         <StatTile
-          value={avoided}
+          value={formatCount(avoided)}
           label="not smoked"
           onPress={() => setOpen(true)}
         />
@@ -47,7 +48,7 @@ export function StatsRow({ profile, now, moneyEquivalents }: StatsRowProps) {
           onPress={() => setOpen(true)}
         />
         <StatTile
-          value={`${life.days}d ${life.hours}h`}
+          value={`${formatCount(life.days)}d ${life.hours}h`}
           label="life regained"
           onPress={() => setOpen(true)}
         />

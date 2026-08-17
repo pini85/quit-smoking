@@ -15,6 +15,9 @@ export type TriggerChipsProps = {
  * One horizontally-scrollable row of triggers. Deliberately optional
  * everywhere it appears: it must never sit between someone and help, so it is
  * always rendered BELOW the action it accompanies and never gates it.
+ *
+ * Default (`md`) chips, not the dense `sm` pill: these are tapped one-handed
+ * mid-craving, so they have to clear the 44px touch target.
  */
 export function TriggerChips({ label, value, onChange }: TriggerChipsProps) {
   return (
@@ -27,7 +30,6 @@ export function TriggerChips({ label, value, onChange }: TriggerChipsProps) {
           return (
             <Chip
               key={trigger}
-              size="sm"
               selected={selected}
               onClick={() => onChange(selected ? undefined : trigger)}
               className="shrink-0 gap-1.5 whitespace-nowrap"
