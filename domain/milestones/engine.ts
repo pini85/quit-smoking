@@ -35,6 +35,37 @@ export function graceWindowHours(earliestHours: number): number {
   return Math.max(earliestHours * 0.5, 2);
 }
 
+/**
+ * Shared point-timing state machine: upcoming below earliest, happening-now
+ * through the grace window, achieved after. Used for real 'point' timings
+ * and for 'window' timings that degenerate to a point (typicalUntil <= earliest).
+ */
+function pointState(
+  m: HealthMilestone,
+  earliestHours: number,
+  elapsedH: number
+): MilestoneState {
+  if (elapsedH < earliestHours) {
+    return {
+      milestone: m,
+      status: 'upcoming',
+      startsInMs: (earliestHours - elapsedH) * HOUR_MS,
+    };
+  }
+  const grace = graceWindowHours(earliestHours);
+  if (elapsedH <= earliestHours + grace) {
+    return { milestone: m, status: 'happening-now' };
+  }
+  // achievedForMs is intentionally measured from earliestHours, not from the
+  // grace-window end — so it starts at ~grace hours (not 0) at the moment
+  // the milestone transitions from happening-now to achieved.
+  return {
+    milestone: m,
+    status: 'achieved',
+    achievedForMs: (elapsedH - earliestHours) * HOUR_MS,
+  };
+}
+
 export function milestoneState(
   m: HealthMilestone,
   quitAt: Date,
@@ -49,6 +80,14 @@ export function milestoneState(
 
   if (timing.kind === 'window') {
     const { earliestHours, typicalUntilHours } = timing;
+    if (typicalUntilHours <= earliestHours) {
+      // Degenerate/malformed window (typicalUntil <= earliest) — treat as a
+      // point milestone at earliestHours (grace window and all) so the
+      // progress division below never sees a zero-or-negative denominator.
+      // This is defense independent of the dataset invariant that real
+      // 'window' entries always have typicalUntilHours > earliestHours.
+      return pointState(m, earliestHours, elapsedH);
+    }
     if (elapsedH < earliestHours) {
       return {
         milestone: m,
@@ -69,23 +108,7 @@ export function milestoneState(
   }
 
   if (timing.kind === 'point') {
-    const { earliestHours } = timing;
-    if (elapsedH < earliestHours) {
-      return {
-        milestone: m,
-        status: 'upcoming',
-        startsInMs: (earliestHours - elapsedH) * HOUR_MS,
-      };
-    }
-    const grace = graceWindowHours(earliestHours);
-    if (elapsedH <= earliestHours + grace) {
-      return { milestone: m, status: 'happening-now' };
-    }
-    return {
-      milestone: m,
-      status: 'achieved',
-      achievedForMs: (elapsedH - earliestHours) * HOUR_MS,
-    };
+    return pointState(m, timing.earliestHours, elapsedH);
   }
 
   // openEnded
@@ -113,11 +136,26 @@ export function computeMilestoneStates(
   return all.map((m) => milestoneState(m, quitAt, now));
 }
 
+/** True for a 'window' timing whose typicalUntil doesn't exceed earliest — treated as a point elsewhere. */
+function isDegenerateWindow(m: HealthMilestone): boolean {
+  return (
+    m.timing.kind === 'window' && m.timing.typicalUntilHours <= m.timing.earliestHours
+  );
+}
+
+/** earliestHours for any dated timing kind (including a degenerate window); null for noTimeline. */
+function earliestHoursOf(m: HealthMilestone): number | null {
+  return m.timing.kind === 'noTimeline' ? null : m.timing.earliestHours;
+}
+
 /** The boundary (in elapsed hours) at which a dated milestone's state last changed. */
 function achievementBoundaryHours(m: HealthMilestone): number | null {
   switch (m.timing.kind) {
     case 'window':
-      return m.timing.typicalUntilHours;
+      // A degenerate window (typicalUntil <= earliest) is handled as a
+      // point in milestoneState, so its boundary is earliestHours too —
+      // matching the achievedForMs anchor used there.
+      return isDegenerateWindow(m) ? m.timing.earliestHours : m.timing.typicalUntilHours;
     case 'point':
     case 'openEnded':
       return m.timing.earliestHours;
@@ -131,24 +169,22 @@ function achievementBoundaryHours(m: HealthMilestone): number | null {
  * first), then points by earliestHours desc.
  *
  * Fallback: if none are happening-now, return the most recently achieved
- * dated milestone (max achievement boundary <= now), length 1. Empty only
- * when no dated milestone has been achieved yet (e.g. pre-quit).
+ * dated milestone (max achievement boundary <= now), length 1. May return
+ * empty when nothing has started yet (e.g. pre-quit, or every dated
+ * milestone's earliest is still ahead of now) — that's correct, not a bug;
+ * callers/UI fall back to showing the upcoming list in that case.
  */
 export function happeningNow(states: MilestoneState[]): MilestoneState[] {
   const active = states.filter((s) => s.status === 'happening-now');
   if (active.length > 0) {
     const windows = active
-      .filter((s) => s.milestone.timing.kind === 'window')
+      .filter((s) => s.milestone.timing.kind === 'window' && !isDegenerateWindow(s.milestone))
       .sort((a, b) => (a.progress ?? 0) - (b.progress ?? 0));
     const points = active
-      .filter((s) => s.milestone.timing.kind === 'point')
-      .sort((a, b) => {
-        const aEarliest =
-          a.milestone.timing.kind === 'point' ? a.milestone.timing.earliestHours : 0;
-        const bEarliest =
-          b.milestone.timing.kind === 'point' ? b.milestone.timing.earliestHours : 0;
-        return bEarliest - aEarliest;
-      });
+      .filter((s) => s.milestone.timing.kind === 'point' || isDegenerateWindow(s.milestone))
+      .sort(
+        (a, b) => (earliestHoursOf(b.milestone) ?? 0) - (earliestHoursOf(a.milestone) ?? 0)
+      );
     return [...windows, ...points];
   }
 

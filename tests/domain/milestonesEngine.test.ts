@@ -95,6 +95,63 @@ describe('milestoneState — window timing', () => {
   });
 });
 
+describe('milestoneState — degenerate window (typicalUntil <= earliest) falls back to point behavior', () => {
+  // earliestHours === typicalUntilHours: no division should ever happen.
+  const equalBounds = fixture('deg-equal', 'heart', {
+    kind: 'window',
+    earliestHours: 10,
+    typicalUntilHours: 10,
+  });
+  // typicalUntilHours < earliestHours: malformed the other way.
+  const invertedBounds = fixture('deg-inverted', 'heart', {
+    kind: 'window',
+    earliestHours: 10,
+    typicalUntilHours: 5,
+  });
+
+  it.each([
+    ['equal bounds', equalBounds],
+    ['inverted bounds', invertedBounds],
+  ])('%s: before earliest is upcoming, never NaN', (_label, m) => {
+    const s = milestoneState(m, EPOCH, at(9));
+    expect(s.status).toBe('upcoming');
+    expect(s.startsInMs).toBe(1 * HOUR);
+    expect(s.progress).toBeUndefined();
+    expect(Number.isNaN(s.progress)).toBe(false);
+  });
+
+  it.each([
+    ['equal bounds', equalBounds],
+    ['inverted bounds', invertedBounds],
+  ])('%s: at earliest is happening-now with no progress (point-style)', (_label, m) => {
+    const s = milestoneState(m, EPOCH, at(10));
+    expect(s.status).toBe('happening-now');
+    expect(s.progress).toBeUndefined();
+  });
+
+  it.each([
+    ['equal bounds', equalBounds],
+    ['inverted bounds', invertedBounds],
+  ])('%s: at the grace edge (earliest + grace = 15) is still happening-now', (_label, m) => {
+    // grace = max(10*0.5, 2) = 5 -> boundary at 15
+    const s = milestoneState(m, EPOCH, at(15));
+    expect(s.status).toBe('happening-now');
+  });
+
+  it.each([
+    ['equal bounds', equalBounds],
+    ['inverted bounds', invertedBounds],
+  ])(
+    '%s: past the grace edge is achieved, achievedForMs measured from earliestHours',
+    (_label, m) => {
+      const s = milestoneState(m, EPOCH, at(16));
+      expect(s.status).toBe('achieved');
+      expect(s.achievedForMs).toBe(6 * HOUR);
+      expect(Number.isNaN(s.achievedForMs)).toBe(false);
+    }
+  );
+});
+
 describe('milestoneState — point timing', () => {
   it('before earliest: upcoming with startsInMs to earliest', () => {
     const s = milestoneState(pointM, EPOCH, at(7));
@@ -248,6 +305,47 @@ describe('happeningNow', () => {
     const result = happeningNow(states);
     expect(result).toHaveLength(1);
     expect(result[0].milestone.id).toBe('o1');
+  });
+
+  it('treats a happening-now degenerate window (typicalUntil <= earliest) as point-like for ordering', () => {
+    const realWindow = fixture('rw', 'heart', {
+      kind: 'window',
+      earliestHours: 0,
+      typicalUntilHours: 10,
+    }); // e=5 -> progress 0.5, happening-now
+    const degenerate = fixture('deg', 'lungs', {
+      kind: 'window',
+      earliestHours: 5,
+      typicalUntilHours: 5,
+    }); // grace = max(2.5,2)=2.5, boundary 7.5; e=5 -> happening-now, point-style (no progress)
+
+    const states = computeMilestoneStates([realWindow, degenerate], EPOCH, at(5));
+    const result = happeningNow(states);
+
+    // The degenerate one must NOT be sorted among "windows" by an undefined
+    // progress (which would silently coerce to 0) — it belongs in the
+    // points bucket, after the real window.
+    expect(result.map((s) => s.milestone.id)).toEqual(['rw', 'deg']);
+  });
+
+  it('fallback ranking for an achieved degenerate window uses earliestHours as its boundary (matches its achievedForMs anchor)', () => {
+    const degenerate = fixture('deg-achieved', 'lungs', {
+      kind: 'window',
+      earliestHours: 10,
+      typicalUntilHours: 10,
+    }); // grace 5, happening-now until e=15; achievedForMs anchor/boundary = earliestHours = 10
+    const otherAchieved = fixture('other-achieved', 'heart', {
+      kind: 'point',
+      earliestHours: 14,
+    }); // grace 7, happening-now until e=21; boundary = earliestHours = 14 (> degenerate's 10)
+
+    const states = computeMilestoneStates([degenerate, otherAchieved], EPOCH, at(50));
+    const result = happeningNow(states);
+
+    // otherAchieved's boundary (14) is more recent than degenerate's (10),
+    // so it — not the degenerate window — is the fallback pick.
+    expect(result).toHaveLength(1);
+    expect(result[0].milestone.id).toBe('other-achieved');
   });
 });
 

@@ -146,6 +146,21 @@ describe('HEALTH_MILESTONES dataset integrity', () => {
     const count = HEALTH_MILESTONES.filter((m) => m.didYouKnow).length;
     expect(count).toBe(12);
   });
+
+  it('has at least one dated (non-noTimeline) milestone with earliestHours === 0', () => {
+    // The milestones engine's `happeningNow` (domain/milestones/engine.ts) can
+    // legitimately return an empty array when nothing has started yet — but
+    // only when every dated milestone's earliest is still ahead of "now".
+    // This dataset invariant guarantees that never happens in the real app:
+    // as long as at least one dated milestone starts at hour 0, the Home
+    // "in your body right now" carousel is non-empty from the very instant
+    // of quitting. If a future dataset edit removes every hour-0 entry, this
+    // test fails loudly rather than the carousel silently going blank.
+    const hasZeroHourMilestone = HEALTH_MILESTONES.some(
+      (m) => m.timing.kind !== 'noTimeline' && m.timing.earliestHours === 0
+    );
+    expect(hasZeroHourMilestone).toBe(true);
+  });
 });
 
 describe('INTERVENTIONS', () => {
