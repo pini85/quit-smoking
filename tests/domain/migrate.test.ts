@@ -243,6 +243,9 @@ describe('captured v1 export file — backward-compatibility guarantee', () => {
     expect(file.profile?.yearsSmoked).toBe(14);
     expect(file.profile?.quitAt).toBe('2026-01-06T07:15:00+02:00');
     expect(file.cravings).toHaveLength(3);
+    expect(file.cravings[0].trigger).toBe('stress');
+    expect(file.cravings[0].finalIntensity).toBe(3);
+    expect(file.cravings[0].endedAt).toBe('2026-01-06T10:49:58+02:00');
     expect(file.cravings[0].interventionIds).toEqual(['breathing', 'cold-water']);
     expect(file.cravings[0].roundCount).toBe(2);
     expect(file.cravings[0].notes).toBe('work call ran long');
