@@ -185,11 +185,11 @@ export const FREEDOM_LESSONS: FreedomLesson[] = [
     notice: "You're tense, and a cigarette arrives as the obvious answer.",
     reflect:
       'Was the tension there before the craving, or did it arrive with it?',
-    idea: 'Most of the time the sequence runs backwards from how it feels: the tension is withdrawal, the cigarette removes the tension it installed, and the loop gets filed under relaxation. A non-smoker sitting in your chair, in your day, with your workload, is not quietly wanting anything. That gap between you and them is the addiction, not the day.',
+    idea: 'The sequence runs backwards from how it feels: the tension is withdrawal, the cigarette removes the tension it installed, and the loop gets filed under relaxation. A non-smoker sitting in your chair, in your day, with your workload, is not quietly wanting anything — and people who stop measure less anxious and less stressed months later, not more. That gap between you and them is the addiction, not the day.',
     beliefIds: ['relaxation', 'stress-relief'],
     triggerIds: ['stress', 'habit'],
-    sourceKind: 'carr',
-    principleRefs: ['A4', 'A3'],
+    sourceKind: 'med',
+    principleRefs: ['A4', 'A3', 'C8'],
   },
   {
     id: 'catch-the-coffee',
@@ -266,7 +266,7 @@ export const FREEDOM_LESSONS: FreedomLesson[] = [
       'Late, warm, among smokers — and one seems like a small, self-contained decision.',
     reflect:
       "Is the real question 'one cigarette', or 'all of them again, from tomorrow'?",
-    idea: "'Just one' never announces what it actually is: a vote to go back to every day, all day, for years. Almost nobody has one and stops there — the wiring is still warm, and a single puff is the strongest predictor of a full return. Ask the real question and the answer gets easy. And if one already happened, that was a hard moment, not a verdict. Log it and carry on.",
+    idea: "'Just one' never announces what it actually is: a vote to go back to every day, all day, for years. Almost nobody has one and stops there — the wiring is still warm, and a single puff is a strong predictor of a full return. Ask the real question and the answer gets easy. And if one already happened, that was a hard moment, not a verdict. Log it and carry on.",
     beliefIds: ['just-one'],
     triggerIds: ['alcohol', 'social', 'emotional'],
     sourceKind: 'psych',

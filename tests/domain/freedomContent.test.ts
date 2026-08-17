@@ -136,19 +136,37 @@ describe('freedom copy: tone and safety scan', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps deprivation vocabulary out of the lessons and brain responses', () => {
-    // Section E bans "giving up" and "sacrifice" outright in app voice. Not on
-    // the brief's list, but the same doctrine, and these two files quote
-    // nothing — the quoting happens in BELIEF_META.promise.
-    const doctrine = ['giving up', 'sacrifice', 'battle'];
+  it('keeps combat and deprivation vocabulary out of the lessons and brain responses', () => {
+    // The rest of research-doc section E, which the brief's list only half
+    // covers. E bans "battle, fight, resist, strength, or beat" as well as
+    // "giving up" and "sacrifice"; the brief's `fight the` only catches one
+    // inflection ("fighting the urge" slips past it), so the stems are matched
+    // here instead. Not on the brief's list, but the same doctrine — and these
+    // two files quote nothing, so there is nothing to exempt: the quoting all
+    // happens in BELIEF_META.promise.
+    //
+    // 'beat' is matched as a whole word: 'heartbeat' and 'beaten track' are not
+    // combat framing, and the app's health content legitimately says the first.
+    const doctrine = [
+      'giving up',
+      'sacrifice',
+      'battle',
+      'fight',
+      'strength',
+      /\bbeat/,
+    ];
     const authored = [
       ...collectCopy(FREEDOM_LESSONS, 'FREEDOM_LESSONS', []),
       ...collectCopy(BRAIN_RESPONSES, 'BRAIN_RESPONSES', []),
     ];
     for (const word of doctrine) {
+      const hits = (value: string) =>
+        typeof word === 'string'
+          ? normalise(value).includes(word)
+          : word.test(normalise(value));
       const offenders = authored
-        .filter(([, value]) => normalise(value).includes(word))
-        .map(([path, value]) => `${path}: ${value}`);
+        .filter(([, value]) => hits(value))
+        .map(([path, value]) => `${path} (${String(word)}): ${value}`);
       expect(offenders).toEqual([]);
     }
   });
@@ -292,10 +310,13 @@ describe('BRAIN_RESPONSES', () => {
     }
   );
 
-  it('splices real history only into beliefs that have contexts to splice', () => {
+  it('splices real history only into beliefs with meaningful contexts', () => {
+    // A single related trigger would make for a thin splice — one context the
+    // user may never have logged. History-backed promises are the ones that
+    // recur across at least two of the app's recorded contexts.
     for (const id of BELIEFS) {
       if (BRAIN_RESPONSES[id].proofKind === 'trigger-history') {
-        expect(BELIEF_META[id].relatedTriggers.length).toBeGreaterThanOrEqual(1);
+        expect(BELIEF_META[id].relatedTriggers.length).toBeGreaterThanOrEqual(2);
       }
     }
   });

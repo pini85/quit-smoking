@@ -61,7 +61,7 @@ export const BRAIN_RESPONSES: Record<Belief, BrainResponse> = {
     lines: [
       "That the drink won't be the same. The drink is exactly the same. What changes is that you stay sitting down for it.",
       "The people outside aren't having a better night. They're topping up so their night stays normal.",
-      'Nobody at this table is thinking about your smoking. That was only ever loud from the inside.',
+      'The drink never tasted of smoke. It tasted of the drink, in between two-minute absences from the table.',
     ],
     proofKind: 'trigger-history',
   },
@@ -76,7 +76,7 @@ export const BRAIN_RESPONSES: Record<Belief, BrainResponse> = {
   concentration: {
     lines: [
       'Focus. Concentration does dip early on — that part is real — and it returns on its own, which is what smoking never let you find out.',
-      'Nicotine is not lending you attention. It keeps removing a dip it keeps creating, then takes the credit for the return.',
+      'Some of it is real: nicotine removes the attentional dip that falling nicotine created, then takes the credit for the return. What it never did was lend you focus you did not have.',
       "The work in front of you is doable at exactly this level of focus. It just won't feel that way for another few minutes.",
     ],
   },
