@@ -14,6 +14,9 @@ export type StepReasonsProps = {
   onBack: () => void;
   onSkip: () => void;
   onStart: () => void;
+  /** True while the wizard's write chain is in flight — disables Skip/Start
+   * so a slow write can't be double-submitted. */
+  saving: boolean;
 };
 
 export function StepReasons({
@@ -26,6 +29,7 @@ export function StepReasons({
   onBack,
   onSkip,
   onStart,
+  saving,
 }: StepReasonsProps) {
   const [draft, setDraft] = useState('');
 
@@ -40,10 +44,10 @@ export function StepReasons({
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onBack} className="-ml-2 px-2">
+        <Button variant="ghost" onClick={onBack} disabled={saving} className="-ml-2 px-2">
           Back
         </Button>
-        <Button variant="ghost" onClick={onSkip} className="-mr-2 px-2">
+        <Button variant="ghost" onClick={onSkip} disabled={saving} className="-mr-2 px-2">
           Skip
         </Button>
       </div>
@@ -94,8 +98,8 @@ export function StepReasons({
       ) : null}
 
       <div className="mt-auto pb-6">
-        <Button fullWidth size="lg" onClick={onStart}>
-          Start
+        <Button fullWidth size="lg" onClick={onStart} disabled={saving}>
+          {saving ? 'Saving…' : 'Start'}
         </Button>
       </div>
     </div>

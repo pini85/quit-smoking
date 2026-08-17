@@ -115,6 +115,11 @@ export function WelcomeWizard() {
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [customReasons, setCustomReasons] = useState<string[]>([]);
 
+  // Guards against a double Start/Skip tap re-entering `finalize`, and lets
+  // step 3 disable its buttons for the (usually sub-100ms, but not
+  // guaranteed) duration of the write chain.
+  const [saving, setSaving] = useState(false);
+
   function handleQuitMomentContinue(quitAt: Date) {
     setQuitAtResolved(quitAt);
     setStep(2);
@@ -137,47 +142,73 @@ export function WelcomeWizard() {
   }
 
   async function finalize(reasonTexts: string[]) {
-    const now = new Date();
-    // "quitting right now" means exactly that: the moment of this submit,
-    // not the moment step 1's Continue was pressed.
-    const quitAt = quitMode === 'now' ? now : quitAtResolved ?? now;
-    const nowIso = toLocalIso(now);
+    if (saving) return; // already in flight — ignore a double Start/Skip tap
+    setSaving(true);
 
-    const profile: QuitProfile = {
-      id: 'singleton',
-      quitAt: toLocalIso(quitAt),
-      cigarettesPerDay,
-      cigarettesPerPack,
-      packPrice,
-      currency,
-      createdAt: nowIso,
-      updatedAt: nowIso,
-    };
-    await store.saveProfile(profile);
+    try {
+      // One shared timestamp for every record this submit creates —
+      // both so createdAt/updatedAt genuinely agree with each other, and
+      // so `quitAt` for "quitting right now" is captured exactly once, at
+      // this final-submit moment (not back at step 1's Continue).
+      const now = new Date();
+      const nowIso = toLocalIso(now);
+      const quitAt = quitMode === 'now' ? now : quitAtResolved ?? now;
 
-    for (const text of reasonTexts) {
-      const reason: PersonalReason = {
-        id: crypto.randomUUID(),
-        text,
-        createdAt: toLocalIso(new Date()),
+      // Order matters: `AppGate` redirects home the instant it sees
+      // `profile !== null`, regardless of what page it's watching from —
+      // `saveProfile`'s write-through `refresh()` notifies subscribers
+      // synchronously-ish (as soon as the read resolves), so if it ran
+      // first, AppGate could win the race and navigate away from
+      // `/welcome` *before* the reasons/preferences below ever reached
+      // disk. Persisting reasons and preferences first, and `saveProfile`
+      // last, means that by the time AppGate's redirect can possibly fire,
+      // every other record this submit creates is already durable — this
+      // component's own `router.replace('/')` right after becomes a
+      // harmless no-op duplicate of whichever redirect (its own, or
+      // AppGate's) lands first.
+      for (const text of reasonTexts) {
+        const reason: PersonalReason = {
+          id: crypto.randomUUID(),
+          text,
+          createdAt: nowIso,
+        };
+        // Sequential on purpose: each reason must be persisted (and the
+        // store's snapshot refreshed) before the next `addReason` runs.
+        await store.addReason(reason);
+      }
+
+      const preferences: Preferences = {
+        id: 'singleton',
+        theme: 'system',
+        showEmergingEvidence: true,
+        updatedAt: nowIso,
       };
-      // Sequential on purpose: each reason must be persisted (and the
-      // store's snapshot refreshed) before the next `addReason` runs.
-      await store.addReason(reason);
+      await store.savePreferences(preferences);
+
+      const profile: QuitProfile = {
+        id: 'singleton',
+        quitAt: toLocalIso(quitAt),
+        cigarettesPerDay,
+        cigarettesPerPack,
+        packPrice,
+        currency,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      await store.saveProfile(profile);
+
+      router.replace('/');
+      showToast("That's it. Everything from here is measured, not promised.", {
+        withRingPulse: true,
+      });
+      // Deliberately leave `saving` true on success: this screen is on its
+      // way out (via the replace above, or AppGate's), so there's no
+      // meaningful "not saving" state to return the buttons to.
+    } catch (err) {
+      console.error('Unsmoke: failed to save onboarding profile', err);
+      showToast('Something went wrong saving your profile. Please try again.');
+      setSaving(false);
     }
-
-    const preferences: Preferences = {
-      id: 'singleton',
-      theme: 'system',
-      showEmergingEvidence: true,
-      updatedAt: toLocalIso(new Date()),
-    };
-    await store.savePreferences(preferences);
-
-    router.replace('/');
-    showToast("That's it. Everything from here is measured, not promised.", {
-      withRingPulse: true,
-    });
   }
 
   function handleSkip() {
@@ -234,6 +265,7 @@ export function WelcomeWizard() {
           onBack={() => setStep(2)}
           onSkip={handleSkip}
           onStart={handleStart}
+          saving={saving}
         />
       ) : null}
     </div>
