@@ -1,7 +1,9 @@
 import type { Repositories, Snapshot } from '@/lib/persistence/repositories';
 import type {
   AchievementUnlock,
+  BeliefAssessment,
   CravingSession,
+  FreedomSession,
   PersonalReason,
   Preferences,
   QuitProfile,
@@ -30,6 +32,8 @@ function initialSnapshot(): AppData {
     achievementUnlocks: [],
     reasons: [],
     preferences: null,
+    beliefAssessments: [],
+    freedomSessions: [],
   };
 }
 
@@ -127,6 +131,20 @@ export class DataStore {
 
   async removeReason(id: string): Promise<void> {
     await this.repos.reasons.remove(id);
+    await this.refresh();
+  }
+
+  // Both freedom-side writes are add-only by design: assessments accumulate
+  // as history and freedom sessions are recorded once, at completion — so
+  // there is no update/remove counterpart to either.
+
+  async addBeliefAssessment(a: BeliefAssessment): Promise<void> {
+    await this.repos.beliefAssessments.add(a);
+    await this.refresh();
+  }
+
+  async addFreedomSession(s: FreedomSession): Promise<void> {
+    await this.repos.freedomSessions.add(s);
     await this.refresh();
   }
 

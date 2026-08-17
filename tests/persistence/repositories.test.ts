@@ -3,7 +3,9 @@ import { createDb, type QuitDb } from '@/lib/persistence/db';
 import { createRepositories } from '@/lib/persistence/dexieRepositories';
 import type {
   AchievementUnlock,
+  BeliefAssessment,
   CravingSession,
+  FreedomSession,
   PersonalReason,
   Preferences,
   QuitProfile,
@@ -66,6 +68,27 @@ function makePreferences(overrides: Partial<Preferences> = {}): Preferences {
     theme: 'system',
     showEmergingEvidence: true,
     updatedAt: '2026-01-01T08:00:00Z',
+    ...overrides,
+  };
+}
+
+function makeAssessment(overrides: Partial<BeliefAssessment> = {}): BeliefAssessment {
+  return {
+    id: crypto.randomUUID(),
+    beliefId: 'relaxation',
+    assessedAt: '2026-01-01T08:00:00Z',
+    strength: 4,
+    context: 'brain',
+    ...overrides,
+  };
+}
+
+function makeFreedomSession(overrides: Partial<FreedomSession> = {}): FreedomSession {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-01T08:00:00Z',
+    endedAt: '2026-01-01T08:05:00Z',
+    kind: 'brain',
     ...overrides,
   };
 }
@@ -294,6 +317,144 @@ describe('PreferencesRepository', () => {
   });
 });
 
+describe('BeliefAssessmentRepository', () => {
+  it('getAll returns an empty array when nothing has been assessed', async () => {
+    const repos = createRepositories(freshDb());
+    expect(await repos.beliefAssessments.getAll()).toEqual([]);
+  });
+
+  it('add stores an assessment, including its optional trigger', async () => {
+    const repos = createRepositories(freshDb());
+    const assessment = makeAssessment({ context: 'craving', trigger: 'coffee', strength: 2 });
+    await repos.beliefAssessments.add(assessment);
+    expect(await repos.beliefAssessments.getAll()).toEqual([assessment]);
+  });
+
+  it('keeps every assessment of the same belief — history is append-only, never overwritten', async () => {
+    const repos = createRepositories(freshDb());
+    const first = makeAssessment({ beliefId: 'reward', strength: 4 });
+    const later = makeAssessment({
+      beliefId: 'reward',
+      strength: 1,
+      assessedAt: '2026-02-01T08:00:00Z',
+    });
+
+    await repos.beliefAssessments.add(first);
+    await repos.beliefAssessments.add(later);
+
+    const all = await repos.beliefAssessments.getAll();
+    expect(all.map((a) => a.id)).toEqual([first.id, later.id]);
+  });
+
+  it('getAll sorts by assessedAt ascending, regardless of insert order', async () => {
+    const repos = createRepositories(freshDb());
+    const late = makeAssessment({ assessedAt: '2026-01-03T08:00:00Z' });
+    const early = makeAssessment({ assessedAt: '2026-01-01T08:00:00Z' });
+    const mid = makeAssessment({ assessedAt: '2026-01-02T08:00:00Z' });
+
+    await repos.beliefAssessments.add(late);
+    await repos.beliefAssessments.add(early);
+    await repos.beliefAssessments.add(mid);
+
+    const all = await repos.beliefAssessments.getAll();
+    expect(all.map((a) => a.id)).toEqual([early.id, mid.id, late.id]);
+  });
+
+  it('getAll sorts by actual instant, not raw string comparison, across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    // Same counterexample as the cravings/reasons ordering tests: "02" < "10"
+    // as strings, but -08:00 vs +09:00 flips which instant is earlier.
+    const laterInstantEarlyLookingString = makeAssessment({
+      assessedAt: '2026-01-01T02:00:00-08:00', // 2026-01-01T10:00:00Z
+    });
+    const earlierInstantLateLookingString = makeAssessment({
+      assessedAt: '2026-01-01T10:00:00+09:00', // 2026-01-01T01:00:00Z
+    });
+
+    await repos.beliefAssessments.bulkPut([
+      laterInstantEarlyLookingString,
+      earlierInstantLateLookingString,
+    ]);
+
+    const all = await repos.beliefAssessments.getAll();
+    expect(all.map((a) => a.id)).toEqual([
+      earlierInstantLateLookingString.id,
+      laterInstantEarlyLookingString.id,
+    ]);
+  });
+
+  it('bulkPut upserts by id (re-putting the same id overwrites, does not duplicate)', async () => {
+    const repos = createRepositories(freshDb());
+    const assessment = makeAssessment({ strength: 4 });
+    await repos.beliefAssessments.bulkPut([assessment]);
+    await repos.beliefAssessments.bulkPut([{ ...assessment, strength: 0 }]);
+
+    const all = await repos.beliefAssessments.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].strength).toBe(0);
+  });
+});
+
+describe('FreedomSessionRepository', () => {
+  it('getAll returns an empty array when no session has been recorded', async () => {
+    const repos = createRepositories(freshDb());
+    expect(await repos.freedomSessions.getAll()).toEqual([]);
+  });
+
+  it('add stores a session, including its optional lessonId/beliefId', async () => {
+    const repos = createRepositories(freshDb());
+    const session = makeFreedomSession({ kind: 'exercise', lessonId: 'why-quitting-is-easy' });
+    await repos.freedomSessions.add(session);
+    expect(await repos.freedomSessions.getAll()).toEqual([session]);
+  });
+
+  it('getAll sorts by startedAt ascending, regardless of insert order', async () => {
+    const repos = createRepositories(freshDb());
+    const late = makeFreedomSession({ startedAt: '2026-01-03T08:00:00Z' });
+    const early = makeFreedomSession({ startedAt: '2026-01-01T08:00:00Z' });
+    const mid = makeFreedomSession({ startedAt: '2026-01-02T08:00:00Z' });
+
+    await repos.freedomSessions.add(late);
+    await repos.freedomSessions.add(early);
+    await repos.freedomSessions.add(mid);
+
+    const all = await repos.freedomSessions.getAll();
+    expect(all.map((s) => s.id)).toEqual([early.id, mid.id, late.id]);
+  });
+
+  it('getAll sorts by actual instant, not raw string comparison, across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    const laterInstantEarlyLookingString = makeFreedomSession({
+      startedAt: '2026-01-01T02:00:00-08:00', // 2026-01-01T10:00:00Z
+    });
+    const earlierInstantLateLookingString = makeFreedomSession({
+      startedAt: '2026-01-01T10:00:00+09:00', // 2026-01-01T01:00:00Z
+    });
+
+    await repos.freedomSessions.bulkPut([
+      laterInstantEarlyLookingString,
+      earlierInstantLateLookingString,
+    ]);
+
+    const all = await repos.freedomSessions.getAll();
+    expect(all.map((s) => s.id)).toEqual([
+      earlierInstantLateLookingString.id,
+      laterInstantEarlyLookingString.id,
+    ]);
+  });
+
+  it('bulkPut upserts by id', async () => {
+    const repos = createRepositories(freshDb());
+    const session = makeFreedomSession({ kind: 'brain' });
+    await repos.freedomSessions.bulkPut([session]);
+    await repos.freedomSessions.bulkPut([{ ...session, kind: 'exercise' }]);
+
+    const all = await repos.freedomSessions.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].kind).toBe('exercise');
+  });
+});
+
 describe('readSnapshot', () => {
   it('returns nulls/empty arrays for an empty database', async () => {
     const repos = createRepositories(freshDb());
@@ -304,22 +465,28 @@ describe('readSnapshot', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
-  it('returns a single consistent read across all five stores', async () => {
+  it('returns a single consistent read across every store', async () => {
     const repos = createRepositories(freshDb());
     const profile = makeProfile();
     const craving = makeCraving();
     const unlock = makeUnlock();
     const reason = makeReason();
     const prefs = makePreferences();
+    const assessment = makeAssessment();
+    const freedomSession = makeFreedomSession();
 
     await repos.profile.save(profile);
     await repos.cravings.add(craving);
     await repos.achievements.addUnlocks([unlock]);
     await repos.reasons.add(reason);
     await repos.preferences.save(prefs);
+    await repos.beliefAssessments.add(assessment);
+    await repos.freedomSessions.add(freedomSession);
 
     const snapshot = await repos.readSnapshot();
     expect(snapshot).toEqual({
@@ -328,10 +495,12 @@ describe('readSnapshot', () => {
       achievementUnlocks: [unlock],
       reasons: [reason],
       preferences: prefs,
+      beliefAssessments: [assessment],
+      freedomSessions: [freedomSession],
     });
   });
 
-  it('sorts cravings and reasons by actual instant across mixed UTC offsets', async () => {
+  it('sorts cravings, reasons, assessments and freedom sessions by actual instant across mixed UTC offsets', async () => {
     const repos = createRepositories(freshDb());
     // Same counterexample as the repository-level ordering tests: "02" <
     // "10" as strings, but -08:00 vs +09:00 flips which instant is earlier.
@@ -339,13 +508,27 @@ describe('readSnapshot', () => {
     const earlierCraving = makeCraving({ startedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
     const laterReason = makeReason({ createdAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
     const earlierReason = makeReason({ createdAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
+    const laterAssessment = makeAssessment({ assessedAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
+    const earlierAssessment = makeAssessment({ assessedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
+    const laterFreedom = makeFreedomSession({ startedAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
+    const earlierFreedom = makeFreedomSession({ startedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
 
     await repos.cravings.bulkPut([laterCraving, earlierCraving]);
     await repos.reasons.bulkPut([laterReason, earlierReason]);
+    await repos.beliefAssessments.bulkPut([laterAssessment, earlierAssessment]);
+    await repos.freedomSessions.bulkPut([laterFreedom, earlierFreedom]);
 
     const snapshot = await repos.readSnapshot();
     expect(snapshot.cravings.map((c) => c.id)).toEqual([earlierCraving.id, laterCraving.id]);
     expect(snapshot.reasons.map((r) => r.id)).toEqual([earlierReason.id, laterReason.id]);
+    expect(snapshot.beliefAssessments.map((a) => a.id)).toEqual([
+      earlierAssessment.id,
+      laterAssessment.id,
+    ]);
+    expect(snapshot.freedomSessions.map((s) => s.id)).toEqual([
+      earlierFreedom.id,
+      laterFreedom.id,
+    ]);
   });
 });
 
@@ -359,12 +542,16 @@ describe('replaceAll', () => {
     await repos.achievements.addUnlocks([makeUnlock({ id: 'stale' })]);
     await repos.reasons.add(makeReason());
     await repos.preferences.save(makePreferences());
+    await repos.beliefAssessments.add(makeAssessment({ beliefId: 'deprivation' }));
+    await repos.freedomSessions.add(makeFreedomSession());
 
     const newProfile = makeProfile({ cigarettesPerDay: 5 });
     const newCraving = makeCraving();
     const newUnlock = makeUnlock({ id: 'fresh' });
     const newReason = makeReason({ text: 'Fresh reason' });
     const newPrefs = makePreferences({ theme: 'light' });
+    const newAssessment = makeAssessment({ beliefId: 'just-one', strength: 1 });
+    const newFreedomSession = makeFreedomSession({ kind: 'exercise', lessonId: 'the-trap' });
 
     await repos.replaceAll({
       profile: newProfile,
@@ -372,6 +559,8 @@ describe('replaceAll', () => {
       achievementUnlocks: [newUnlock],
       reasons: [newReason],
       preferences: newPrefs,
+      beliefAssessments: [newAssessment],
+      freedomSessions: [newFreedomSession],
     });
 
     const snapshot = await repos.readSnapshot();
@@ -381,6 +570,8 @@ describe('replaceAll', () => {
       achievementUnlocks: [newUnlock],
       reasons: [newReason],
       preferences: newPrefs,
+      beliefAssessments: [newAssessment],
+      freedomSessions: [newFreedomSession],
     });
   });
 
@@ -391,6 +582,8 @@ describe('replaceAll', () => {
     await repos.achievements.addUnlocks([makeUnlock()]);
     await repos.reasons.add(makeReason());
     await repos.preferences.save(makePreferences());
+    await repos.beliefAssessments.add(makeAssessment());
+    await repos.freedomSessions.add(makeFreedomSession());
 
     await repos.replaceAll({
       profile: null,
@@ -398,6 +591,8 @@ describe('replaceAll', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
 
     expect(await repos.readSnapshot()).toEqual({
@@ -406,6 +601,8 @@ describe('replaceAll', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -416,12 +613,16 @@ describe('replaceAll', () => {
     const originalUnlock = makeUnlock();
     const originalReason = makeReason();
     const originalPrefs = makePreferences();
+    const originalAssessment = makeAssessment();
+    const originalFreedomSession = makeFreedomSession();
 
     await repos.profile.save(originalProfile);
     await repos.cravings.add(originalCraving);
     await repos.achievements.addUnlocks([originalUnlock]);
     await repos.reasons.add(originalReason);
     await repos.preferences.save(originalPrefs);
+    await repos.beliefAssessments.add(originalAssessment);
+    await repos.freedomSessions.add(originalFreedomSession);
 
     // A function value is not structured-cloneable, so IndexedDB rejects the
     // write with a DataCloneError partway through the transaction. This
@@ -441,6 +642,8 @@ describe('replaceAll', () => {
         achievementUnlocks: [],
         reasons: [poisonedReason],
         preferences: null,
+        beliefAssessments: [],
+        freedomSessions: [],
       })
     ).rejects.toBeTruthy();
 
@@ -453,6 +656,8 @@ describe('replaceAll', () => {
       achievementUnlocks: [originalUnlock],
       reasons: [originalReason],
       preferences: originalPrefs,
+      beliefAssessments: [originalAssessment],
+      freedomSessions: [originalFreedomSession],
     });
   });
 });
@@ -465,6 +670,8 @@ describe('clearAll', () => {
     await repos.achievements.addUnlocks([makeUnlock()]);
     await repos.reasons.add(makeReason());
     await repos.preferences.save(makePreferences());
+    await repos.beliefAssessments.add(makeAssessment());
+    await repos.freedomSessions.add(makeFreedomSession());
 
     await repos.clearAll();
 
@@ -474,6 +681,8 @@ describe('clearAll', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 });

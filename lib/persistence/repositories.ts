@@ -4,6 +4,8 @@ import type {
   AchievementUnlock,
   PersonalReason,
   Preferences,
+  BeliefAssessment,
+  FreedomSession,
 } from '@/domain/types';
 
 export interface ProfileRepository {
@@ -38,12 +40,31 @@ export interface PreferencesRepository {
   save(p: Preferences): Promise<void>;
 }
 
+// Assessments are append-only history: re-assessing the same belief adds a
+// row rather than replacing one, so "how convincing is this promise now"
+// can be read as a trend. Hence no `update`/`remove` — only `add`.
+export interface BeliefAssessmentRepository {
+  add(a: BeliefAssessment): Promise<void>;
+  getAll(): Promise<BeliefAssessment[]>; // sorted by assessedAt asc
+  bulkPut(a: BeliefAssessment[]): Promise<void>;
+}
+
+// Freedom sessions are written ONCE, at completion (see `FreedomSession` in
+// domain/types) — there is no open-then-finalize lifecycle, so no `update`.
+export interface FreedomSessionRepository {
+  add(s: FreedomSession): Promise<void>;
+  getAll(): Promise<FreedomSession[]>; // sorted by startedAt asc
+  bulkPut(s: FreedomSession[]): Promise<void>;
+}
+
 export interface Snapshot {
   profile: QuitProfile | null;
   cravings: CravingSession[];
   achievementUnlocks: AchievementUnlock[];
   reasons: PersonalReason[];
   preferences: Preferences | null;
+  beliefAssessments: BeliefAssessment[];
+  freedomSessions: FreedomSession[];
 }
 
 export interface Repositories {
@@ -52,6 +73,8 @@ export interface Repositories {
   achievements: AchievementRepository;
   reasons: ReasonRepository;
   preferences: PreferencesRepository;
+  beliefAssessments: BeliefAssessmentRepository;
+  freedomSessions: FreedomSessionRepository;
   readSnapshot(): Promise<Snapshot>; // one consistent read across all stores
   replaceAll(s: Snapshot): Promise<void>; // transactional: clear all stores + write snapshot
   clearAll(): Promise<void>;

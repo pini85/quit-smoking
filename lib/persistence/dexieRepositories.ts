@@ -1,7 +1,9 @@
 import type { QuitDb } from './db';
 import type {
   AchievementRepository,
+  BeliefAssessmentRepository,
   CravingRepository,
+  FreedomSessionRepository,
   PreferencesRepository,
   ProfileRepository,
   ReasonRepository,
@@ -104,12 +106,44 @@ function createPreferencesRepository(db: QuitDb): PreferencesRepository {
   };
 }
 
+function createBeliefAssessmentRepository(db: QuitDb): BeliefAssessmentRepository {
+  return {
+    async add(a) {
+      await db.beliefAssessments.add(a);
+    },
+    async getAll() {
+      const rows = await db.beliefAssessments.toArray();
+      return sortChronologically(rows, (a) => a.assessedAt);
+    },
+    async bulkPut(a) {
+      await db.beliefAssessments.bulkPut(a);
+    },
+  };
+}
+
+function createFreedomSessionRepository(db: QuitDb): FreedomSessionRepository {
+  return {
+    async add(s) {
+      await db.freedomSessions.add(s);
+    },
+    async getAll() {
+      const rows = await db.freedomSessions.toArray();
+      return sortChronologically(rows, (s) => s.startedAt);
+    },
+    async bulkPut(s) {
+      await db.freedomSessions.bulkPut(s);
+    },
+  };
+}
+
 export function createRepositories(db: QuitDb): Repositories {
   const profile = createProfileRepository(db);
   const cravings = createCravingRepository(db);
   const achievements = createAchievementRepository(db);
   const reasons = createReasonRepository(db);
   const preferences = createPreferencesRepository(db);
+  const beliefAssessments = createBeliefAssessmentRepository(db);
+  const freedomSessions = createFreedomSessionRepository(db);
 
   const allTables = [
     db.profile,
@@ -117,6 +151,8 @@ export function createRepositories(db: QuitDb): Repositories {
     db.achievementUnlocks,
     db.reasons,
     db.preferences,
+    db.beliefAssessments,
+    db.freedomSessions,
   ];
 
   return {
@@ -125,23 +161,36 @@ export function createRepositories(db: QuitDb): Repositories {
     achievements,
     reasons,
     preferences,
+    beliefAssessments,
+    freedomSessions,
 
     readSnapshot(): Promise<Snapshot> {
       return db.transaction('r', allTables, async () => {
-        const [profileRow, cravingRows, achievementRows, reasonRows, preferencesRow] =
-          await Promise.all([
-            db.profile.get(SINGLETON_ID),
-            db.cravings.toArray(),
-            db.achievementUnlocks.toArray(),
-            db.reasons.toArray(),
-            db.preferences.get(SINGLETON_ID),
-          ]);
+        const [
+          profileRow,
+          cravingRows,
+          achievementRows,
+          reasonRows,
+          preferencesRow,
+          assessmentRows,
+          freedomRows,
+        ] = await Promise.all([
+          db.profile.get(SINGLETON_ID),
+          db.cravings.toArray(),
+          db.achievementUnlocks.toArray(),
+          db.reasons.toArray(),
+          db.preferences.get(SINGLETON_ID),
+          db.beliefAssessments.toArray(),
+          db.freedomSessions.toArray(),
+        ]);
         return {
           profile: profileRow ?? null,
           cravings: sortChronologically(cravingRows, (c) => c.startedAt),
           achievementUnlocks: achievementRows,
           reasons: sortChronologically(reasonRows, (r) => r.createdAt),
           preferences: preferencesRow ?? null,
+          beliefAssessments: sortChronologically(assessmentRows, (a) => a.assessedAt),
+          freedomSessions: sortChronologically(freedomRows, (s) => s.startedAt),
         };
       });
     },
@@ -159,6 +208,8 @@ export function createRepositories(db: QuitDb): Repositories {
           db.achievementUnlocks.clear(),
           db.reasons.clear(),
           db.preferences.clear(),
+          db.beliefAssessments.clear(),
+          db.freedomSessions.clear(),
         ]);
         await Promise.all([
           s.profile ? db.profile.put(s.profile) : Promise.resolve(),
@@ -166,6 +217,8 @@ export function createRepositories(db: QuitDb): Repositories {
           db.achievementUnlocks.bulkPut(s.achievementUnlocks),
           db.reasons.bulkPut(s.reasons),
           s.preferences ? db.preferences.put(s.preferences) : Promise.resolve(),
+          db.beliefAssessments.bulkPut(s.beliefAssessments),
+          db.freedomSessions.bulkPut(s.freedomSessions),
         ]);
       });
     },
@@ -178,6 +231,8 @@ export function createRepositories(db: QuitDb): Repositories {
           db.achievementUnlocks.clear(),
           db.reasons.clear(),
           db.preferences.clear(),
+          db.beliefAssessments.clear(),
+          db.freedomSessions.clear(),
         ]);
       });
     },

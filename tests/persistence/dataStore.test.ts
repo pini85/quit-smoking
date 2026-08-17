@@ -3,7 +3,13 @@ import { createDb, type QuitDb } from '@/lib/persistence/db';
 import { createRepositories } from '@/lib/persistence/dexieRepositories';
 import { DataStore } from '@/lib/services/dataStore';
 import type { Repositories, Snapshot } from '@/lib/persistence/repositories';
-import type { CravingSession, PersonalReason, QuitProfile } from '@/domain/types';
+import type {
+  BeliefAssessment,
+  CravingSession,
+  FreedomSession,
+  PersonalReason,
+  QuitProfile,
+} from '@/domain/types';
 
 // Every test gets its own isolated fake-indexeddb database so state never
 // leaks across tests. Track open DBs and close+delete them after each test.
@@ -56,6 +62,27 @@ function makeReason(overrides: Partial<PersonalReason> = {}): PersonalReason {
   };
 }
 
+function makeAssessment(overrides: Partial<BeliefAssessment> = {}): BeliefAssessment {
+  return {
+    id: crypto.randomUUID(),
+    beliefId: 'relaxation',
+    assessedAt: '2026-01-01T08:00:00Z',
+    strength: 4,
+    context: 'brain',
+    ...overrides,
+  };
+}
+
+function makeFreedomSession(overrides: Partial<FreedomSession> = {}): FreedomSession {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-01T08:00:00Z',
+    endedAt: '2026-01-01T08:05:00Z',
+    kind: 'brain',
+    ...overrides,
+  };
+}
+
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     profile: null,
@@ -63,6 +90,8 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     achievementUnlocks: [],
     reasons: [],
     preferences: null,
+    beliefAssessments: [],
+    freedomSessions: [],
     ...overrides,
   };
 }
@@ -92,6 +121,8 @@ function makeStubRepositories(readSnapshot: Repositories['readSnapshot']): Repos
       bulkPut: async () => {},
     },
     preferences: { get: async () => undefined, save: async () => {} },
+    beliefAssessments: { add: async () => {}, getAll: async () => [], bulkPut: async () => {} },
+    freedomSessions: { add: async () => {}, getAll: async () => [], bulkPut: async () => {} },
     readSnapshot,
     replaceAll: async () => {},
     clearAll: async () => {},
@@ -108,6 +139,8 @@ describe('DataStore', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -129,6 +162,8 @@ describe('DataStore', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -245,6 +280,49 @@ describe('DataStore', () => {
 
     await store.addUnlocks([unlock]);
     expect(store.getSnapshot().achievementUnlocks).toEqual([unlock]);
+  });
+
+  it('addBeliefAssessment persists and publishes it in the snapshot', async () => {
+    const db = freshDb();
+    const store = new DataStore(createRepositories(db));
+    await store.load();
+
+    const assessment = makeAssessment({ beliefId: 'just-one', strength: 2, context: 'craving' });
+    await store.addBeliefAssessment(assessment);
+    expect(store.getSnapshot().beliefAssessments).toEqual([assessment]);
+
+    // Persisted, not merely cached: a fresh DataStore on the same db sees it.
+    const secondStore = new DataStore(createRepositories(db));
+    await secondStore.load();
+    expect(secondStore.getSnapshot().beliefAssessments).toEqual([assessment]);
+  });
+
+  it('addFreedomSession persists and publishes it in the snapshot', async () => {
+    const db = freshDb();
+    const store = new DataStore(createRepositories(db));
+    await store.load();
+
+    const session = makeFreedomSession({ kind: 'exercise', lessonId: 'the-trap' });
+    await store.addFreedomSession(session);
+    expect(store.getSnapshot().freedomSessions).toEqual([session]);
+
+    const secondStore = new DataStore(createRepositories(db));
+    await secondStore.load();
+    expect(secondStore.getSnapshot().freedomSessions).toEqual([session]);
+  });
+
+  it('addBeliefAssessment and addFreedomSession each notify exactly once', async () => {
+    const db = freshDb();
+    const store = new DataStore(createRepositories(db));
+    await store.load();
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    await store.addBeliefAssessment(makeAssessment());
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    await store.addFreedomSession(makeFreedomSession());
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 
   it('a write-through call notifies exactly once', async () => {

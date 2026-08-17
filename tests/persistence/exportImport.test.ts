@@ -184,6 +184,8 @@ describe('export -> erase -> import(replace) roundtrip', () => {
       achievementUnlocks: [],
       reasons: [],
       preferences: null,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
 
     const { file } = await previewImport(repos, json);
@@ -196,6 +198,8 @@ describe('export -> erase -> import(replace) roundtrip', () => {
       achievementUnlocks: [seeded.unlock],
       reasons: [seeded.reason],
       preferences: seeded.prefs,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -291,6 +295,8 @@ describe('previewImport rejects corruption without touching the DB', () => {
       achievementUnlocks: [seeded.unlock],
       reasons: [seeded.reason],
       preferences: seeded.prefs,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -317,6 +323,8 @@ describe('previewImport rejects corruption without touching the DB', () => {
       achievementUnlocks: [seeded.unlock],
       reasons: [seeded.reason],
       preferences: seeded.prefs,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 
@@ -342,6 +350,8 @@ describe('previewImport rejects corruption without touching the DB', () => {
       achievementUnlocks: [seeded.unlock],
       reasons: [seeded.reason],
       preferences: seeded.prefs,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 });
@@ -378,6 +388,8 @@ describe('applyImport replace atomicity', () => {
       achievementUnlocks: [seeded.unlock],
       reasons: [seeded.reason],
       preferences: seeded.prefs,
+      beliefAssessments: [],
+      freedomSessions: [],
     });
   });
 });

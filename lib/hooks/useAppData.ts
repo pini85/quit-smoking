@@ -49,6 +49,8 @@ const SERVER_SNAPSHOT: AppData = {
   achievementUnlocks: [],
   reasons: [],
   preferences: null,
+  beliefAssessments: [],
+  freedomSessions: [],
 };
 
 function getServerSnapshot(): AppData {
