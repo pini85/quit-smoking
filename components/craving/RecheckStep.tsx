@@ -11,7 +11,10 @@ export type RecheckStepProps = {
   initialIntensity: number;
   finalIntensity?: number;
   trigger?: Trigger;
-  roundCount: number;
+  /** How many interrupters this session has actually run. */
+  interventionsRun: number;
+  /** True while the outcome write is in flight — blocks a double-submit. */
+  busy?: boolean;
   onTriggerChange: (trigger: Trigger | undefined) => void;
   onSelectIntensity: (intensity: number) => void;
   onPassed: () => void;
@@ -35,7 +38,8 @@ export function RecheckStep({
   initialIntensity,
   finalIntensity,
   trigger,
-  roundCount,
+  interventionsRun,
+  busy = false,
   onTriggerChange,
   onSelectIntensity,
   onPassed,
@@ -72,13 +76,14 @@ export function RecheckStep({
 
         {finalIntensity === undefined ? null : (
           <div className="animate-fade-in flex flex-col gap-2">
-            <Button size="lg" fullWidth onClick={onPassed}>
+            <Button size="lg" fullWidth disabled={busy} onClick={onPassed}>
               Gone
             </Button>
             <Button
               variant="secondary"
               size="lg"
               fullWidth
+              disabled={busy}
               onClick={onMuchWeaker}
             >
               Much weaker
@@ -87,16 +92,12 @@ export function RecheckStep({
               variant="secondary"
               size="lg"
               fullWidth
+              disabled={busy}
               onClick={() => setStillThereOpen(true)}
             >
               Still there
             </Button>
-            <Button
-              variant="ghost"
-              size="lg"
-              fullWidth
-              onClick={onSmoked}
-            >
+            <Button variant="ghost" size="lg" fullWidth disabled={busy} onClick={onSmoked}>
               I smoked
             </Button>
           </div>
@@ -118,10 +119,12 @@ export function RecheckStep({
           >
             Try another way
           </Button>
-          {/* Offered only once a second round has actually happened: telling
-              someone to put the phone down before they've tried anything else
-              would be giving up on their behalf. */}
-          {roundCount >= 2 ? (
+          {/* Offered as soon as the user has actually tried something. Gating
+              this on a SECOND round made the sheet one-way on round one:
+              "try another way" or nothing, with no way to log an honest
+              "still there" and put the phone down — which is exactly the
+              advice the rest of this screen gives. */}
+          {interventionsRun >= 1 ? (
             <Button
               variant="ghost"
               size="lg"

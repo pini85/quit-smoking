@@ -10,6 +10,10 @@ export type ResumeSessionSheetProps = {
   onResolve: (outcome: CravingOutcome) => void;
   /** Overlay tap, Escape, hardware back and the X all land here too. */
   onDismiss: () => void;
+  /** Straight to `/craving`, writing nothing to the old session. */
+  onNewCraving: () => void;
+  /** True while an answer is being written. */
+  busy?: boolean;
 };
 
 /**
@@ -20,12 +24,20 @@ export type ResumeSessionSheetProps = {
  * `finalIntensity` absent; the outcome alone is the part still worth having.
  * Dismissing is a real answer too — it closes the row as 'unresolved', which
  * is excluded from both sides of the pass rate.
+ *
+ * The last action exists because this sheet covers the craving FAB. Someone
+ * who opened the app mid-craving must not have to answer a question about
+ * the PAST one first — that would make the worst case three taps to help
+ * instead of two. It navigates straight into the flow and writes nothing:
+ * the old row stays open and the 15-minute finalizer ages it out honestly.
  */
 export function ResumeSessionSheet({
   session,
   now,
   onResolve,
   onDismiss,
+  onNewCraving,
+  busy = false,
 }: ResumeSessionSheetProps) {
   const elapsedMs = now.getTime() - new Date(session.startedAt).getTime();
   // Never "0 minutes ago" — the sheet only appears once the user has left the
@@ -38,13 +50,14 @@ export function ResumeSessionSheet({
         You logged a craving {minutes} minute{minutes === 1 ? '' : 's'} ago. How did it go?
       </p>
       <div className="flex flex-col gap-2">
-        <Button size="lg" fullWidth onClick={() => onResolve('passed')}>
+        <Button size="lg" fullWidth disabled={busy} onClick={() => onResolve('passed')}>
           Gone
         </Button>
         <Button
           variant="secondary"
           size="lg"
           fullWidth
+          disabled={busy}
           onClick={() => onResolve('much-weaker')}
         >
           Much weaker
@@ -53,6 +66,7 @@ export function ResumeSessionSheet({
           variant="secondary"
           size="lg"
           fullWidth
+          disabled={busy}
           onClick={() => onResolve('still-there')}
         >
           Still there
@@ -61,11 +75,18 @@ export function ResumeSessionSheet({
           variant="ghost"
           size="lg"
           fullWidth
+          disabled={busy}
           onClick={() => onResolve('smoked')}
         >
           I smoked
         </Button>
-        <Button variant="ghost" fullWidth onClick={onDismiss}>
+
+        {/* Never disabled: help must stay reachable even mid-write. */}
+        <Button variant="secondary" size="lg" fullWidth onClick={onNewCraving}>
+          I&rsquo;m having a craving now &rarr;
+        </Button>
+
+        <Button variant="ghost" fullWidth disabled={busy} onClick={onDismiss}>
           Dismiss
         </Button>
       </div>

@@ -29,6 +29,18 @@ export function IntensityScale({ value, previous, onSelect }: IntensityScaleProp
   const [blooming, setBlooming] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // The 250ms bloom means `onSelect` fires from a LATER render than the tap,
+  // and anything the user does in between (tapping a trigger chip, most
+  // obviously) re-renders the parent with a fresh callback. Firing the
+  // callback captured at tap time would run a closure over pre-tap state.
+  // Callers are expected to be robust to this too, but a control that
+  // deliberately delays its own callback should not be the thing that
+  // requires it.
+  const onSelectRef = useRef(onSelect);
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
   useEffect(() => {
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
@@ -46,7 +58,7 @@ export function IntensityScale({ value, previous, onSelect }: IntensityScaleProp
       // Released so the scale stays re-tappable: on the re-check step someone
       // may well want to correct the number they just chose.
       setBlooming(null);
-      onSelect(n);
+      onSelectRef.current(n);
     }, BLOOM_MS);
   }
 

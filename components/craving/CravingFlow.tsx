@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CravingOutcome, CravingSession, Trigger } from '@/domain/types';
 import type { InterventionKind } from '@/data/interventions';
@@ -8,6 +8,8 @@ import { cravingCounts } from '@/domain/stats/cravingStats';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
+import { buildCravingSession, withTrigger } from '@/lib/services/cravingSession';
+import { showToast } from '@/components/ui/Toast';
 import { toLocalIso } from '@/lib/utils/iso';
 import { IntensityStep } from './IntensityStep';
 import { InterrupterStep } from './InterrupterStep';
@@ -22,17 +24,6 @@ import { ProofRunner } from './runners/ProofRunner';
 type Phase = 'intensity' | 'chooser' | 'runner' | 'recheck' | 'complete' | 'slip';
 
 const TIMED_KINDS: InterventionKind[] = ['urge-surf', 'delay', 'water', 'scene-change'];
-
-/** Strips a cleared trigger's key entirely rather than storing `undefined`. */
-function withTrigger(session: CravingSession, trigger: Trigger | undefined): CravingSession {
-  const next = { ...session };
-  if (trigger === undefined) {
-    delete next.trigger;
-  } else {
-    next.trigger = trigger;
-  }
-  return next;
-}
 
 /**
  * The craving session, end to end. This is the screen the whole app exists
@@ -59,6 +50,14 @@ export function CravingFlow() {
   const [draftTrigger, setDraftTrigger] = useState<Trigger | undefined>(undefined);
   const [activeKind, setActiveKind] = useState<InterventionKind | null>(null);
   const [completionVariant, setCompletionVariant] = useState<CompletionVariant>('win');
+  const [saving, setSaving] = useState(false);
+
+  // Write-path mirrors of the two pieces of state a delayed callback could
+  // otherwise read a stale copy of. Assigned only from event handlers (never
+  // during render), always immediately before the matching setState — see
+  // `commit` below for the full reasoning.
+  const sessionRef = useRef<CravingSession | null>(null);
+  const draftTriggerRef = useRef<Trigger | undefined>(undefined);
 
   const sessionId = session?.id ?? null;
 
@@ -98,85 +97,130 @@ export function CravingFlow() {
 
   const passedCount = cravingCounts(mergedCravings).passedWithoutSmoking;
 
-  function persist(next: CravingSession): void {
+  /**
+   * Commits a new version of the session: refs first (so the NEXT write reads
+   * it, whatever React has rendered), then state, then persistence.
+   *
+   * The refs are the reason this exists. `IntensityScale` fires its `onSelect`
+   * 250ms after the tap, and a trigger chip tapped inside that window
+   * re-renders this component — so the callback that eventually runs is a
+   * closure over the PREVIOUS render. Reading `session` / `draftTrigger` from
+   * that closure would build a write out of stale data and, because
+   * `updateCraving` is a whole-row put, silently erase the trigger the user
+   * just chose. Every write path below therefore reads `sessionRef.current` /
+   * `draftTriggerRef.current`, which are only ever assigned from event
+   * handlers and so are always the latest committed values.
+   */
+  function commit(next: CravingSession): void {
+    sessionRef.current = next;
     setSession(next);
-    void store.updateCraving(next);
+    store.updateCraving(next).catch((error: unknown) => {
+      // Mid-flow: log, but never interrupt the exercise with a toast. The
+      // session is still open, so the finalizer closes it honestly later.
+      console.error('Unsmoke: failed to update craving session', error);
+    });
   }
 
   function handleStartSession(intensity: number): void {
-    const startedAt = new Date();
-    const quitAt = data.profile ? new Date(data.profile.quitAt).getTime() : 0;
-    const next: CravingSession = {
+    if (sessionRef.current !== null) return;
+    const next = buildCravingSession({
       id: crypto.randomUUID(),
-      startedAt: toLocalIso(startedAt),
+      startedAt: new Date(),
       initialIntensity: intensity,
-      outcome: null,
-      preQuit: quitAt > startedAt.getTime(),
-      ...(draftTrigger === undefined ? {} : { trigger: draftTrigger }),
-    };
+      trigger: draftTriggerRef.current,
+      quitAt: data.profile ? new Date(data.profile.quitAt) : null,
+    });
+    sessionRef.current = next;
     setSession(next);
     setPhase('chooser');
-    void store.addCraving(next);
+    store.addCraving(next).catch((error: unknown) => {
+      console.error('Unsmoke: failed to create craving session', error);
+    });
   }
 
   function handleTriggerChange(trigger: Trigger | undefined): void {
-    if (session === null) {
+    const current = sessionRef.current;
+    if (current === null) {
+      draftTriggerRef.current = trigger;
       setDraftTrigger(trigger);
       return;
     }
-    persist(withTrigger(session, trigger));
+    commit(withTrigger(current, trigger));
   }
 
   function handleStartIntervention(kind: InterventionKind): void {
-    if (session === null) return;
+    const current = sessionRef.current;
+    if (current === null) return;
     // 'proof' has nothing to say without a trigger. The picker's gate already
     // requires one, so this is unreachable — but a blank screen mid-craving
     // is the single worst thing this flow could do, so it cannot be one
     // refactor away either.
     const safeKind: InterventionKind =
-      kind === 'proof' && session.trigger === undefined ? 'breathing' : kind;
+      kind === 'proof' && current.trigger === undefined ? 'breathing' : kind;
     setActiveKind(safeKind);
     setPhase('runner');
-    persist({
-      ...session,
-      interventionIds: [...(session.interventionIds ?? []), safeKind],
+    commit({
+      ...current,
+      interventionIds: [...(current.interventionIds ?? []), safeKind],
     });
   }
 
   function handleRecheckIntensity(intensity: number): void {
-    if (session === null) return;
-    persist({ ...session, finalIntensity: intensity });
+    const current = sessionRef.current;
+    if (current === null) return;
+    commit({ ...current, finalIntensity: intensity });
   }
 
-  /** Writes a terminal outcome, then re-checks every achievement. */
-  async function resolve(outcome: CravingOutcome): Promise<void> {
-    if (session === null) return;
+  /**
+   * Writes a terminal outcome and only then moves the user on. Unlike every
+   * other step, this one waits: showing a completion screen for a session
+   * that failed to save would be the app lying about the one number it exists
+   * to keep. The write is a local IndexedDB put, so the wait is invisible in
+   * the normal case, and the buttons disable while it is in flight.
+   */
+  async function handleOutcome(
+    outcome: CravingOutcome,
+    variant: CompletionVariant
+  ): Promise<void> {
+    const current = sessionRef.current;
+    if (current === null || saving) return;
+    setSaving(true);
     const next: CravingSession = {
-      ...session,
+      ...current,
       outcome,
       endedAt: toLocalIso(new Date()),
     };
+    try {
+      await store.updateCraving(next);
+    } catch (error) {
+      console.error('Unsmoke: failed to save craving outcome', error);
+      showToast("Couldn't save — please try again.");
+      setSaving(false);
+      // Local state is deliberately untouched: the session stays open and the
+      // user stays on the re-check step with their answer still on screen.
+      return;
+    }
+    sessionRef.current = next;
     setSession(next);
-    await store.updateCraving(next);
-    await sweepAchievements(store);
-  }
-
-  function handleOutcome(outcome: CravingOutcome, variant: CompletionVariant): void {
-    // Screen first, write second — the user should never watch a spinner to
-    // find out that their craving passed.
     setCompletionVariant(variant);
     setPhase(outcome === 'smoked' ? 'slip' : 'complete');
-    void resolve(outcome);
+    setSaving(false);
+    // Achievements are a bonus on top of a write that already succeeded —
+    // never a reason to hold up or fail the completion screen.
+    sweepAchievements(store).catch((error: unknown) => {
+      console.error('Unsmoke: failed to sweep achievements', error);
+    });
   }
 
   function handleTryAnother(): void {
-    if (session === null) return;
-    const next: CravingSession = { ...session, roundCount: (session.roundCount ?? 1) + 1 };
+    const current = sessionRef.current;
+    if (current === null) return;
+    const next: CravingSession = { ...current, roundCount: (current.roundCount ?? 1) + 1 };
     // Round two gets a genuinely fresh measurement — carrying the previous
     // round's number forward would both pre-answer the question and leave a
     // stale `finalIntensity` on disk if the session were abandoned here.
     delete next.finalIntensity;
-    persist(next);
+    commit(next);
     setActiveKind(null);
     setPhase('chooser');
   }
@@ -266,14 +310,15 @@ export function CravingFlow() {
           initialIntensity={session.initialIntensity}
           finalIntensity={session.finalIntensity}
           trigger={session.trigger}
-          roundCount={session.roundCount ?? 1}
+          interventionsRun={session.interventionIds?.length ?? 0}
+          busy={saving}
           onTriggerChange={handleTriggerChange}
           onSelectIntensity={handleRecheckIntensity}
-          onPassed={() => handleOutcome('passed', 'win')}
-          onMuchWeaker={() => handleOutcome('much-weaker', 'win')}
-          onSmoked={() => handleOutcome('smoked', 'win')}
+          onPassed={() => void handleOutcome('passed', 'win')}
+          onMuchWeaker={() => void handleOutcome('much-weaker', 'win')}
+          onSmoked={() => void handleOutcome('smoked', 'win')}
           onTryAnother={handleTryAnother}
-          onLogStillThere={() => handleOutcome('still-there', 'logged')}
+          onLogStillThere={() => void handleOutcome('still-there', 'logged')}
         />
       ) : null}
 
