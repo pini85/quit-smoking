@@ -8,6 +8,7 @@ import { toLocalIso } from '@/lib/utils/iso';
 import type { PersonalReason, Preferences, QuitProfile } from '@/domain/types';
 import { ProgressDots } from './ProgressDots';
 import { StepQuitMoment, type QuitMode } from './StepQuitMoment';
+import { RestoreBackup } from './RestoreBackup';
 import { StepSmokingProfile } from './StepSmokingProfile';
 import { StepReasons } from './StepReasons';
 
@@ -228,6 +229,9 @@ export function WelcomeWizard() {
       {step === 1 ? (
         <StepQuitMoment
           mode={quitMode}
+          // Only offered on step 1: past it the user has started answering,
+          // and a restore would discard those answers anyway.
+          footer={<RestoreBackup store={store} />}
           alreadyQuitAt={alreadyQuitAt}
           soonQuitAt={soonQuitAt}
           soonMin={soonMin}

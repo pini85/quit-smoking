@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { TabBar } from './TabBar';
 import { UpdateToast } from './UpdateToast';
 import { SessionRecovery } from '@/components/craving/SessionRecovery';
+import { AchievementTicker } from '@/components/providers/AchievementTicker';
 
 /** Full-bleed, single-purpose routes: no tab bar to pull attention away. */
 const IMMERSIVE_ROUTES = ['/craving', '/welcome'];
@@ -28,6 +29,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Mounted here rather than inside AppGate so it survives every route
           change; it no-ops on /craving, where the session is still live. */}
       <SessionRecovery />
+      {/* Renders nothing; unlocks time-based badges on whatever screen the
+          user is actually on, instead of waiting for the next write. */}
+      <AchievementTicker />
       {/* Always mounted so the service worker registers on any entry route;
           the banner itself stays out of the way on the immersive ones. */}
       <UpdateToast suppressed={immersive} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
@@ -8,6 +8,12 @@ export type QuitMode = 'now' | 'already' | 'soon';
 
 export type StepQuitMomentProps = {
   mode: QuitMode;
+  /**
+   * Rendered quietly under the option cards — the wizard passes
+   * `<RestoreBackup>` here. Kept as a slot so this step stays
+   * presentational and never touches the store itself.
+   */
+  footer?: ReactNode;
   alreadyQuitAt: string;
   soonQuitAt: string;
   soonMin: Date;
@@ -64,6 +70,7 @@ function OptionRow({
  */
 export function StepQuitMoment({
   mode,
+  footer,
   alreadyQuitAt,
   soonQuitAt,
   soonMin,
@@ -180,6 +187,8 @@ export function StepQuitMoment({
           ) : null}
         </Card>
       </div>
+
+      {footer ? <div className="flex flex-col">{footer}</div> : null}
 
       {error ? (
         <p role="alert" className="text-sm text-danger">

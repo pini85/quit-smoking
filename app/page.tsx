@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { HealthMilestone } from '@/domain/types';
 import { HEALTH_MILESTONES } from '@/data/healthMilestones';
 import { computeMilestoneStates } from '@/domain/milestones/engine';
+import { currentStreakStart } from '@/domain/stats/quitStats';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
 import { Card } from '@/components/ui/Card';
@@ -52,6 +53,14 @@ export default function TodayPage() {
     );
   }, [quitAtMs, minuteKey]);
 
+  // The current streak's anchor: quitAt until something is smoked, the last
+  // slip after that. Only the hero's headline duration uses it — every other
+  // number on this screen is a lifetime-since-quit total.
+  const streakStart = useMemo(() => {
+    if (quitAtMs === null) return null;
+    return currentStreakStart(new Date(quitAtMs), data.cravings);
+  }, [quitAtMs, data.cravings]);
+
   if (data.status !== 'ready' || profile === null || quitAtMs === null) {
     return <Skeleton />;
   }
@@ -63,7 +72,11 @@ export default function TodayPage() {
   return (
     <>
       <div className="flex flex-col gap-4 pt-2">
-        <Hero quitAt={quitAt} onOpenMilestone={setSheetMilestone} />
+        <Hero
+          quitAt={quitAt}
+          streakStart={streakStart ?? quitAt}
+          onOpenMilestone={setSheetMilestone}
+        />
 
         {preQuit ? null : (
           <StatsRow

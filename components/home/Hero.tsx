@@ -15,6 +15,13 @@ const MINUTE_MS = 60_000;
 
 export type HeroProps = {
   quitAt: Date;
+  /**
+   * Start of the CURRENT smoke-free streak (`currentStreakStart`). Equals
+   * `quitAt` when nothing has been smoked since; later than it once a slip
+   * is logged. Optional so a caller with no craving list still gets the
+   * pre-slip behaviour.
+   */
+  streakStart?: Date;
   onOpenMilestone: (milestone: HealthMilestone) => void;
 };
 
@@ -65,8 +72,14 @@ function digitalSizeClass(text: string): string {
  * to this subtree. The milestone maths is memoised on the current *minute* so
  * 80 milestone states aren't recomputed 60 times a minute for a caption that
  * only ever says "in about 3h".
+ *
+ * TWO anchors, deliberately: the big number counts from `streakStart`, so the
+ * word "smoke-free" under it stays literally true after a logged slip, while
+ * the ring, the next-milestone caption and the recovery-stage chip stay
+ * anchored to `quitAt` — those describe what the body has been doing since
+ * the quit, which a single cigarette does not reset to zero.
  */
-export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
+export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
   const now = useNow(1000);
   const [precise, setPrecise] = useState(false);
 
@@ -74,6 +87,12 @@ export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
   const nowMs = now.getTime();
   const elapsedMs = nowMs - quitAtMs;
   const preQuit = elapsedMs < 0;
+
+  const streakStartAt = streakStart ?? quitAt;
+  const streakStartMs = streakStartAt.getTime();
+  // A slip only ever moves the streak start FORWARD past quitAt.
+  const hasSlip = streakStartMs > quitAtMs;
+  const streakElapsedMs = Math.max(0, nowMs - streakStartMs);
 
   const minuteKey = Math.floor(nowMs / MINUTE_MS);
   const next = useMemo(() => {
@@ -91,8 +110,9 @@ export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
   const progress = preQuit ? 1 : progressTowardNext(elapsedHours, nextHours);
 
   const stage = recoveryStage(quitAt, now);
-  const smokeFree = formatSmokeFreeDuration(quitAt, now);
-  const digital = formatDurationDigital(preQuit ? quitAtMs - nowMs : elapsedMs);
+  const smokeFree = formatSmokeFreeDuration(streakStartAt, now);
+  const digital = formatDurationDigital(preQuit ? quitAtMs - nowMs : streakElapsedMs);
+  const sinceQuit = hasSlip ? formatSmokeFreeDuration(quitAt, now).primary : null;
 
   return (
     <section className="flex flex-col items-center gap-4 pt-2">
@@ -156,6 +176,14 @@ export function Hero({ quitAt, onOpenMilestone }: HeroProps) {
           )}
         </Ring>
       </button>
+
+      {/* Only after a slip: the streak restarted, but the time since the quit
+          itself — and everything the body did with it — is still the user's. */}
+      {!preQuit && sinceQuit ? (
+        <p className="max-w-[30ch] text-balance px-2 text-center text-[13px] leading-relaxed text-ink-faint">
+          {sinceQuit} since you quit — still yours
+        </p>
+      ) : null}
 
       {!preQuit && next ? (
         <button

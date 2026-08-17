@@ -3,8 +3,8 @@
 A private, local-first quit-smoking companion. It gives you six things: a live
 count of how long you have been smoke-free, a three-minute craving flow you can
 reach from any screen, an evidence-linked map of what your body is recovering,
-proof drawn from your own logged cravings, and a place to keep the reasons you
-started.
+proof drawn from your own logged cravings, badges that unlock only on what you
+have actually done, and a place to keep the reasons you started.
 
 Nothing in it is guesswork dressed up as a fact. Every health milestone carries
 its evidence level and its source, every derived number can be tapped to see
