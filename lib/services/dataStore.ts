@@ -36,6 +36,14 @@ function initialSnapshot(): AppData {
 export class DataStore {
   private snapshot: AppData = initialSnapshot();
   private readonly listeners = new Set<() => void>();
+  // Monotonic sequence number guarding against out-of-order resolution of
+  // concurrent readSnapshot() calls: two write-throughs firing close
+  // together each kick off their own readAndPublish(), and IndexedDB gives
+  // no ordering guarantee on which finishes first. Without this guard, an
+  // older read that happens to settle last would silently overwrite a
+  // newer one with stale data. Each call captures its own ticket; if the
+  // sequence has moved on by the time it resolves, its result is discarded.
+  private seq = 0;
 
   constructor(private readonly repos: Repositories) {}
 
@@ -62,8 +70,15 @@ export class DataStore {
   }
 
   private async readAndPublish(): Promise<void> {
+    const mine = ++this.seq;
     const snap = await this.repos.readSnapshot();
-    this.snapshot = { status: 'ready', ...snap };
+    // A newer readAndPublish() call started after this one and will publish
+    // its own (newer) result — discard this now-stale result rather than
+    // clobber whatever it (or something even newer still) installs.
+    if (mine !== this.seq) return;
+    // `snap` spread first, `status` after: a future `Snapshot` field can
+    // never clobber `status`, and `status` can never be clobbered by one.
+    this.snapshot = { ...snap, status: 'ready' };
     this.notify();
   }
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createDb, type QuitDb } from '@/lib/persistence/db';
 import { createRepositories } from '@/lib/persistence/dexieRepositories';
 import { DataStore } from '@/lib/services/dataStore';
+import type { Repositories, Snapshot } from '@/lib/persistence/repositories';
 import type { CravingSession, PersonalReason, QuitProfile } from '@/domain/types';
 
 // Every test gets its own isolated fake-indexeddb database so state never
@@ -52,6 +53,48 @@ function makeReason(overrides: Partial<PersonalReason> = {}): PersonalReason {
     text: 'For my health',
     createdAt: '2026-01-01T08:00:00Z',
     ...overrides,
+  };
+}
+
+function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
+  return {
+    profile: null,
+    cravings: [],
+    achievementUnlocks: [],
+    reasons: [],
+    preferences: null,
+    ...overrides,
+  };
+}
+
+/** A `Repositories` stub whose `readSnapshot` is fully controlled by the
+ * test, so concurrent-resolution-order scenarios (which a real, fast
+ * fake-indexeddb backend can't reliably reproduce) can be exercised
+ * deterministically. No other method is expected to be called by the tests
+ * that use this stub. */
+function makeStubRepositories(readSnapshot: Repositories['readSnapshot']): Repositories {
+  return {
+    profile: { get: async () => undefined, save: async () => {} },
+    cravings: {
+      add: async () => {},
+      update: async () => {},
+      get: async () => undefined,
+      getAll: async () => [],
+      getOpen: async () => [],
+      bulkPut: async () => {},
+    },
+    achievements: { getUnlocks: async () => [], addUnlocks: async () => {} },
+    reasons: {
+      getAll: async () => [],
+      add: async () => {},
+      update: async () => {},
+      remove: async () => {},
+      bulkPut: async () => {},
+    },
+    preferences: { get: async () => undefined, save: async () => {} },
+    readSnapshot,
+    replaceAll: async () => {},
+    clearAll: async () => {},
   };
 }
 
@@ -213,5 +256,37 @@ describe('DataStore', () => {
 
     await store.addReason(makeReason());
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('discards a stale readSnapshot result that resolves after a newer one', async () => {
+    const pendingReads: Array<(s: Snapshot) => void> = [];
+    const repos = makeStubRepositories(
+      () =>
+        new Promise<Snapshot>((resolve) => {
+          pendingReads.push(resolve);
+        })
+    );
+    const store = new DataStore(repos);
+
+    // Simulate two concurrent write-throughs each kicking off their own
+    // readSnapshot() — IndexedDB gives no ordering guarantee on which
+    // settles first.
+    const olderRefresh = store.refresh(); // read #1, started first ("older")
+    const newerRefresh = store.refresh(); // read #2, started second ("newer")
+    expect(pendingReads).toHaveLength(2);
+
+    // Resolve OUT of order: the newer call settles first...
+    const newerReason = makeReason({ text: 'from the newer read' });
+    pendingReads[1](makeSnapshot({ reasons: [newerReason] }));
+    await newerRefresh;
+    expect(store.getSnapshot().reasons).toEqual([newerReason]);
+
+    // ...then the older call settles last, with data that must NOT clobber
+    // the newer snapshot already installed.
+    const olderReason = makeReason({ text: 'from the older, now-stale read' });
+    pendingReads[0](makeSnapshot({ reasons: [olderReason] }));
+    await olderRefresh;
+
+    expect(store.getSnapshot().reasons).toEqual([newerReason]);
   });
 });

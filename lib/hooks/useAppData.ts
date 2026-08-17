@@ -4,40 +4,40 @@ import { createContext, useCallback, useContext, useSyncExternalStore } from 're
 import { DataStore, type AppData } from '@/lib/services/dataStore';
 import type { Repositories } from '@/lib/persistence/repositories';
 
-// A `Repositories` that throws the moment any method on it is touched. Used
-// only as the constructor argument for `SERVER_STORE` below — during
-// server-side rendering / static prerendering there is no IndexedDB, so no
-// real `Repositories` exists yet, but `DataStore` still needs *something*
-// structurally typed as `Repositories` to construct. Its methods are never
-// actually invoked during prerendering (only effects/handlers call
-// `DataStore` write methods, and neither runs during SSR); if that
-// invariant is ever violated, this throws loudly instead of doing nothing.
-function createInertRepositories(): Repositories {
+// A `Repositories` that throws the given message the moment any method on
+// it is touched. Used as the constructor argument for inert `DataStore`s
+// that structurally need *something* typed as `Repositories` but must never
+// actually read or write. Exported so `AppDataProvider` can build its own
+// inert store (with a message tailored to *why* there's no real store yet)
+// for the "client, but IndexedDB unavailable" case, distinct from the
+// true-server-render case below.
+export function createInertRepositories(message: string): Repositories {
   return new Proxy({} as Repositories, {
     get(): never {
-      throw new Error(
-        'Server-side DataStore has no real repositories. DataStore methods ' +
-          'must only be called from effects or event handlers, never during render.'
-      );
+      throw new Error(message);
     },
   });
 }
 
 // Module constant: a `DataStore` that is permanently in the `loading` state
-// and can never read/write real data. This is both the context's default
-// value (used if `useAppData` is ever called outside `AppDataProvider`) and
-// the value `AppDataProvider` renders with on the server, where
-// `getAppRepositories()` cannot run. Being a real `DataStore` (rather than
-// `null`) keeps `useAppData`'s return type non-nullable while staying
-// completely inert until a real store replaces it on the client.
-// Exported so `AppDataProvider` can render it explicitly on the server
-// (where no `DataStore` can exist yet) instead of relying on
-// `createContext`'s default — that default only applies when there's no
-// Provider in the tree at all, not when a Provider is present but has
-// nothing to give it yet.
-export const SERVER_STORE = new DataStore(createInertRepositories());
+// and can never read/write real data. Used for the *true* server-render
+// case (no `window` at all, e.g. static prerendering in Node) — never for
+// "client but IndexedDB unavailable", which gets its own inert store with a
+// more accurate message (see `AppDataProvider`). Its methods are never
+// actually invoked during prerendering (only effects/handlers call
+// `DataStore` write methods, and neither runs during SSR); if that
+// invariant is ever violated, this throws loudly instead of doing nothing.
+export const SERVER_STORE = new DataStore(
+  createInertRepositories(
+    'Server-side DataStore has no real repositories. DataStore methods ' +
+      'must only be called from effects or event handlers, never during render.'
+  )
+);
 
-export const AppDataContext = createContext<DataStore>(SERVER_STORE);
+// `null` means "no `AppDataProvider` ancestor" — `useAppData()` throws in
+// that case (see below) rather than silently handing back an inert store,
+// so a missing provider fails loudly instead of quietly never loading data.
+export const AppDataContext = createContext<DataStore | null>(null);
 
 // Stable module-constant reference — required by the `useSyncExternalStore`
 // server-snapshot contract (see `lib/hooks/useNow.ts` for the same pattern).
@@ -57,6 +57,9 @@ function getServerSnapshot(): AppData {
 
 export function useAppData(): { data: AppData; store: DataStore } {
   const store = useContext(AppDataContext);
+  if (store === null) {
+    throw new Error('useAppData must be used within <AppDataProvider>');
+  }
 
   // Bind subscribe/getSnapshot to this render's `store` but keep their
   // identities stable across re-renders (as long as `store` itself doesn't
