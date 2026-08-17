@@ -270,6 +270,49 @@ describe('conditionMet — smoke-free-weekend', () => {
     });
     expect(conditionMet(cond, ctx)).toBe(false);
   });
+
+  // The weekend span is built from local Date parts (`setDate`/`setHours`,
+  // not raw ms arithmetic — see `weekendWindowEnd`) specifically so a DST
+  // transition falling inside the Fri 18:00 -> Mon 06:00 window doesn't shift
+  // the wall-clock boundary by an hour. These two spans were chosen to land
+  // on the actual 2026 EU DST transition Sundays (spring-forward Mar 29,
+  // fall-back Oct 25) so that in a European timezone they exercise a real
+  // 23-hour and a real 25-hour day inside the span. This test necessarily
+  // depends on the machine's local timezone for whether a transition is
+  // actually crossed (e.g. it's a no-op in a zone without DST, or on a
+  // different date in the US), but the assertions hold in ANY timezone: the
+  // boundary must land exactly on Monday 06:00 local time regardless of how
+  // many wall-clock hours elapsed to get there. That's the property under
+  // test either way.
+  it('a span crossing the EU spring-forward DST transition (last weekend of March) still resolves on Monday 06:00 local', () => {
+    const quitAt = new Date(2026, 2, 23, 0, 0, 0).toISOString(); // Mon Mar 23 2026
+    const justBefore = mkCtx({
+      profile: mkProfile({ quitAt }),
+      now: new Date(2026, 2, 30, 5, 59, 59, 999), // Mon Mar 30, just before 06:00
+    });
+    expect(conditionMet(cond, justBefore)).toBe(false);
+
+    const exactly = mkCtx({
+      profile: mkProfile({ quitAt }),
+      now: new Date(2026, 2, 30, 6, 0, 0, 0), // Mon Mar 30, 06:00 exactly
+    });
+    expect(conditionMet(cond, exactly)).toBe(true);
+  });
+
+  it('a span crossing the EU fall-back DST transition (last weekend of October) still resolves on Monday 06:00 local', () => {
+    const quitAt = new Date(2026, 9, 19, 0, 0, 0).toISOString(); // Mon Oct 19 2026
+    const justBefore = mkCtx({
+      profile: mkProfile({ quitAt }),
+      now: new Date(2026, 9, 26, 5, 59, 59, 999), // Mon Oct 26, just before 06:00
+    });
+    expect(conditionMet(cond, justBefore)).toBe(false);
+
+    const exactly = mkCtx({
+      profile: mkProfile({ quitAt }),
+      now: new Date(2026, 9, 26, 6, 0, 0, 0), // Mon Oct 26, 06:00 exactly
+    });
+    expect(conditionMet(cond, exactly)).toBe(true);
+  });
 });
 
 describe('evaluateAchievements', () => {

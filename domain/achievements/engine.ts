@@ -43,12 +43,16 @@ export interface AchievementContext {
 function longestGapBetweenSessionsMs(cravings: CravingSession[], now: Date): number | null {
   if (cravings.length === 0) return null;
   const times = cravings.map((c) => new Date(c.startedAt).getTime()).sort((a, b) => a - b);
-  const gaps: number[] = [];
+  // Accumulate the max in a plain loop rather than `Math.max(0, ...gaps)` —
+  // a spread of one entry per session would risk a RangeError (blowing
+  // V8's argument-count limit) once a user has logged thousands of
+  // sessions. Same pattern as `cravingStats.longestCravingFreeGapMs`.
+  let maxGap = now.getTime() - times[times.length - 1];
   for (let i = 1; i < times.length; i++) {
-    gaps.push(times[i] - times[i - 1]);
+    const gap = times[i] - times[i - 1];
+    if (gap > maxGap) maxGap = gap;
   }
-  gaps.push(now.getTime() - times[times.length - 1]);
-  return Math.max(0, ...gaps);
+  return Math.max(0, maxGap);
 }
 
 /** Friday at 18:00 local time, on or after `from` (strictly later if `from` is already past this Friday's 18:00). */
