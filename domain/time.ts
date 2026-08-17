@@ -34,6 +34,11 @@ export function startOfLocalDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 }
 
+/** Whole local days since the epoch — changes exactly at local midnight. */
+export function daysSinceEpoch(now: Date): number {
+  return Math.floor(startOfLocalDay(now).getTime() / DAY_MS);
+}
+
 /** ISO week: Monday 00:00 local. */
 export function startOfLocalWeek(d: Date): Date {
   const start = startOfLocalDay(d);

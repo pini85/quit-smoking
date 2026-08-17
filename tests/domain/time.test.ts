@@ -8,6 +8,7 @@ import {
   isoWeekKey,
   formatSmokeFreeDuration,
   formatDurationDigital,
+  daysSinceEpoch,
 } from '@/domain/time';
 
 describe('durationBetween', () => {
@@ -102,6 +103,26 @@ describe('localHourOf', () => {
     // A date-only string (no time component) is not a conforming
     // date-time string for this function's contract.
     expect(() => localHourOf('2026-08-17')).toThrow();
+  });
+});
+
+describe('daysSinceEpoch', () => {
+  it('is a pure function of the local calendar day (identical for any two times on the same local day)', () => {
+    const morning = new Date(2026, 7, 17, 0, 0, 0, 1);
+    const night = new Date(2026, 7, 17, 23, 59, 59, 999);
+    expect(daysSinceEpoch(morning)).toBe(daysSinceEpoch(night));
+  });
+
+  it('boundary: changes by exactly 1 the instant local midnight is crossed', () => {
+    const justBeforeMidnight = new Date(2026, 7, 17, 23, 59, 59, 999);
+    const justAfterMidnight = new Date(2026, 7, 18, 0, 0, 0, 0);
+    expect(daysSinceEpoch(justAfterMidnight)).toBe(daysSinceEpoch(justBeforeMidnight) + 1);
+  });
+
+  it('two dates 24h apart on the local calendar differ by exactly 1', () => {
+    const day1 = new Date(2026, 7, 17, 9, 0, 0);
+    const day2 = new Date(2026, 7, 18, 9, 0, 0);
+    expect(daysSinceEpoch(day2) - daysSinceEpoch(day1)).toBe(1);
   });
 });
 

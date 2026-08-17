@@ -2,19 +2,13 @@
 
 import type { HealthMilestone } from '@/domain/types';
 import { HEALTH_MILESTONES } from '@/data/healthMilestones';
-import { startOfLocalDay } from '@/domain/time';
+import { daysSinceEpoch } from '@/domain/time';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
 import { Card } from '@/components/ui/Card';
 
 const STORAGE_KEY = 'unsmoke.discovery.dismissed';
-const DAY_MS = 86_400_000;
 
 const POOL: HealthMilestone[] = HEALTH_MILESTONES.filter((m) => m.didYouKnow === true);
-
-/** Whole local days since the epoch — changes exactly at local midnight. */
-export function daysSinceEpoch(now: Date): number {
-  return Math.floor(startOfLocalDay(now).getTime() / DAY_MS);
-}
 
 function localDateKey(now: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
