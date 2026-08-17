@@ -78,6 +78,19 @@ describe('cravingCounts', () => {
     expect(result.passRate).toBeNull();
     expect(Number.isNaN(result.passRate as unknown as number)).toBe(false);
   });
+
+  it('INCLUDES preQuit sessions (craving stats do not filter preQuit — unlike quit stats)', () => {
+    const sessions = [
+      mkSession({ outcome: 'passed', preQuit: true }),
+      mkSession({ outcome: 'smoked', preQuit: true }),
+      mkSession({ outcome: 'passed', preQuit: false }),
+    ];
+    const result = cravingCounts(sessions);
+    expect(result.total).toBe(3);
+    expect(result.resolved).toBe(3);
+    expect(result.smoked).toBe(1);
+    expect(result.passedWithoutSmoking).toBe(2);
+  });
 });
 
 describe('avgInitialIntensity', () => {
@@ -92,6 +105,14 @@ describe('avgInitialIntensity', () => {
       mkSession({ initialIntensity: 4 }),
     ];
     expect(avgInitialIntensity(sessions)).toBeCloseTo(3.7, 5);
+  });
+
+  it('INCLUDES preQuit sessions in the average', () => {
+    const sessions = [
+      mkSession({ initialIntensity: 2, preQuit: true }),
+      mkSession({ initialIntensity: 8, preQuit: false }),
+    ];
+    expect(avgInitialIntensity(sessions)).toBe(5);
   });
 });
 
@@ -237,10 +258,26 @@ describe('hardestWindow', () => {
     ];
     expect(hardestWindow(sessions)).toEqual({ startHour: 23, endHour: 2, count: 9 });
   });
+
+  it('breaks a tie between equally-dense windows by picking the LOWEST startHour', () => {
+    // Windows [1,2,3] and [10,11,12] both have count 3; no other 3h window
+    // reaches 3. The lowest starting hour (1) must win, deterministically.
+    const sessions = [
+      mkSession({ startedAt: '2026-01-01T01:00:00Z' }),
+      mkSession({ startedAt: '2026-01-01T02:00:00Z' }),
+      mkSession({ startedAt: '2026-01-01T03:00:00Z' }),
+      mkSession({ startedAt: '2026-01-01T10:00:00Z' }),
+      mkSession({ startedAt: '2026-01-01T11:00:00Z' }),
+      mkSession({ startedAt: '2026-01-01T12:00:00Z' }),
+    ];
+    expect(hardestWindow(sessions)).toEqual({ startHour: 1, endHour: 4, count: 3 });
+  });
 });
 
 describe('weeklyCounts', () => {
-  it('zero-fills every ISO week from quitAt through now inclusive', () => {
+  it('zero-fills every ISO week from quitAt through now inclusive (literal keys)', () => {
+    // 2026-01-01 is a Thursday; its Monday is 2025-12-29, which is 2026-W01
+    // (see time.test.ts's ISO year-boundary case). Weeks step W01..W04.
     const quitAt = new Date(2026, 0, 1, 9, 0, 0);
     const now = new Date(quitAt.getTime() + 21 * 86_400_000); // exactly 3 weeks later
     const sessions = [
@@ -249,13 +286,26 @@ describe('weeklyCounts', () => {
     ];
     const result = weeklyCounts(sessions, quitAt, now);
     // quitAt's week, two quiet weeks in between, then now's week: 4 weeks inclusive.
-    expect(result).toHaveLength(4);
+    expect(result).toEqual([
+      { weekKey: '2026-W01', count: 1 },
+      { weekKey: '2026-W02', count: 0 },
+      { weekKey: '2026-W03', count: 0 },
+      { weekKey: '2026-W04', count: 1 },
+    ]);
     expect(result[0].weekKey).toBe(isoWeekKey(startOfLocalWeek(quitAt)));
     expect(result[3].weekKey).toBe(isoWeekKey(startOfLocalWeek(now)));
-    expect(result[0].count).toBe(1);
-    expect(result[1].count).toBe(0); // quiet middle weeks, zero-filled
-    expect(result[2].count).toBe(0);
-    expect(result[3].count).toBe(1);
+  });
+
+  it('zero-fills correctly across an ISO year boundary (literal keys)', () => {
+    // 2025-12-22 (Mon) is 2025-W52; +14 days lands on 2026-01-05 (Mon), 2026-W02.
+    const quitAt = new Date(2025, 11, 22, 9, 0, 0);
+    const now = new Date(quitAt.getTime() + 14 * 86_400_000);
+    const result = weeklyCounts([], quitAt, now);
+    expect(result).toEqual([
+      { weekKey: '2025-W52', count: 0 },
+      { weekKey: '2026-W01', count: 0 },
+      { weekKey: '2026-W02', count: 0 },
+    ]);
   });
 
   it('returns a single zero-count week when there are no sessions and quitAt === now', () => {
@@ -282,6 +332,17 @@ describe('longestCravingFreeGapMs', () => {
       // gap from 01-03 to now (01-10) = 7d, the largest
     ];
     expect(longestCravingFreeGapMs(sessions, quitAt, now)).toBe(7 * 86_400_000);
+  });
+
+  it('drops sessions that started before quitAt (preQuit logging) rather than counting pre-quit time as a gap', () => {
+    const quitAt = new Date('2026-01-10T00:00:00Z');
+    const now = new Date('2026-01-12T00:00:00Z');
+    const sessions = [
+      mkSession({ startedAt: '2026-01-01T00:00:00Z', preQuit: true }), // before quitAt — must be dropped
+    ];
+    // Without the fix this would report a ~9-day gap (from the preQuit
+    // session to now) instead of the real 2-day quitAt-to-now gap.
+    expect(longestCravingFreeGapMs(sessions, quitAt, now)).toBe(2 * 86_400_000);
   });
 });
 
@@ -369,6 +430,20 @@ describe('firstWeekVsThisWeek', () => {
     const result = firstWeekVsThisWeek(sessions, quitAt, now);
     expect(result).not.toBeNull();
     expect(result?.firstWeek.count).toBe(1);
-    expect(result?.thisWeek).toBeDefined();
+  });
+
+  it('compares symmetric ROLLING 7-day windows: firstWeek=[quitAt,+7d), thisWeek=[now-7d,now)', () => {
+    const quitAt = new Date('2026-01-01T00:00:00Z');
+    const now = new Date(quitAt.getTime() + 30 * 86_400_000); // well past the 14-day gate
+    const eightDaysAgo = new Date(now.getTime() - 8 * 86_400_000).toISOString();
+    const sixDaysAgo = new Date(now.getTime() - 6 * 86_400_000).toISOString();
+    const sessions = [
+      mkSession({ startedAt: eightDaysAgo, initialIntensity: 1 }), // outside thisWeek
+      mkSession({ startedAt: sixDaysAgo, initialIntensity: 9 }), // inside thisWeek
+    ];
+    const result = firstWeekVsThisWeek(sessions, quitAt, now);
+    expect(result).not.toBeNull();
+    expect(result?.thisWeek.count).toBe(1);
+    expect(result?.thisWeek.avgInitialIntensity).toBe(9);
   });
 });
