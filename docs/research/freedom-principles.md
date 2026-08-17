@@ -388,57 +388,67 @@ mapped to the Carr principles (section **A**, above) that address them.
 Eight behavioral-science mechanisms that underpin why the Freedom approach is
 plausible, independent of Carr's own framing.
 
-**C1. Cue-conditioning** — **[PSYCH, robust]**. Repeated pairing turns everyday
-contexts (coffee, driving, a phone call) into conditioned stimuli for smoking;
-across roughly 1.5 million puff-level trials for a pack-a-day smoker over 20
-years, dopamine signaling shifts from the drug itself onto the predictive cue.
-(Bevins & Palmatier 2004.)
+### C1. Cue-conditioning
 
-**C2. Habit loops** — **[PSYCH]**. The standard cue → routine → reward loop.
-The practical task is identifying which reward is actually operating in a given
-loop (the break itself, the social contact, the pause) and preserving that
-reward while removing the cigarette from the loop.
+**[PSYCH, robust]**. Repeated pairing turns everyday contexts (coffee, driving,
+a phone call) into conditioned stimuli for smoking; across roughly 1.5 million
+puff-level trials for a pack-a-day smoker over 20 years, dopamine signaling
+shifts from the drug itself onto the predictive cue. (Bevins & Palmatier 2004.)
 
-**C3. Extinction learning** — **[PSYCH] mechanism; clinical cue-exposure
-therapy shows only modest effect sizes**. Each smoke-free exposure to a
-previously smoking-linked cue functions as an inhibitory-learning "rep" that
-weakens the cue-smoking association. It is context-specific — a "renewal
-effect" means an association can resurface in a genuinely novel context even
-after extinguishing elsewhere, which is worth flagging honestly. This is the
-mechanism behind both **A12** (ritual pairings) and any "you already proved
-this" style copy in the app.
+### C2. Habit loops
 
-**C4. Urge surfing** — **[PSYCH, promising]**. Bowen & Marlatt 2009 found
-roughly a 26% reduction in smoking from brief urge-surfing instruction; the
-proposed mechanism is a changed relationship to the urge itself, not
-suppression of it. This already harmonizes with the app's existing UrgeWave
-runner feature.
+**[PSYCH]**. The standard cue → routine → reward loop. The practical task is
+identifying which reward is actually operating in a given loop (the break
+itself, the social contact, the pause) and preserving that reward while
+removing the cigarette from the loop.
 
-**C5. Cognitive restructuring** — **[PSYCH, established, core CBT mechanism]**.
-The standard belief → examine → replace loop. This is the honest scientific
-description of why the Easyway method plausibly works at all — every belief in
-the catalog (section **B**) becomes, functionally, a restructuring card.
+### C3. Extinction learning
 
-**C6. Implementation intentions** — **[PSYCH, strong evidence base for
-smoking cessation specifically]**. If-then contingency plans ("if X happens,
-then I will do Y"). McWilliams 2019's meta-analysis found an overall odds ratio
-of 1.70. Noted here as a candidate mechanism for a later release; not part of
-this task's scope.
+**[PSYCH] mechanism; clinical cue-exposure therapy shows only modest effect
+sizes**. Each smoke-free exposure to a previously smoking-linked cue functions
+as an inhibitory-learning "rep" that weakens the cue-smoking association. It is
+context-specific — a "renewal effect" means an association can resurface in a
+genuinely novel context even after extinguishing elsewhere, which is worth
+flagging honestly. This is the mechanism behind both **A12** (ritual pairings)
+and any "you already proved this" style copy in the app.
 
-**C7. Abstinence violation effect (AVE)** — **[PSYCH]** (Marlatt & Gordon).
-After a lapse, attributing it internally, stably, and globally ("I have no
-willpower, I always fail, this is who I am") is what converts a single lapse
-into a full relapse. **Design law: Carr's "there's no such thing as just one"
-(A10) is prevention framing only — it is never to be applied after an actual
-slip has occurred.** Post-slip, the app must use situational attribution
-("that specific moment was hard") with zero catastrophizing. The app's existing
-slip-handling behavior already implements this; Freedom content must not
-contradict or undermine it.
+### C4. Urge surfing
 
-**C8. Deprivation reversal / mental-health gains** — **[MED]**. Parrott
-1994/2012; Taylor, *BMJ* 2014; Cochrane 2021. These are the safest "Carr was
-right about this" facts available — quitting measurably reduces anxiety,
-depression, and stress rather than increasing it.
+**[PSYCH, promising]**. Bowen & Marlatt 2009 found roughly a 26% reduction in
+smoking from brief urge-surfing instruction; the proposed mechanism is a
+changed relationship to the urge itself, not suppression of it. This already
+harmonizes with the app's existing UrgeWave runner feature.
+
+### C5. Cognitive restructuring
+
+**[PSYCH, established, core CBT mechanism]**. The standard belief → examine →
+replace loop. This is the honest scientific description of why the Easyway
+method plausibly works at all — every belief in the catalog (section **B**)
+becomes, functionally, a restructuring card.
+
+### C6. Implementation intentions
+
+**[PSYCH, strong evidence base for smoking cessation specifically]**. If-then
+contingency plans ("if X happens, then I will do Y"). McWilliams 2019's
+meta-analysis found an overall odds ratio of 1.70. Noted here as a candidate
+mechanism for a later release; not part of this task's scope.
+
+### C7. Abstinence violation effect (AVE)
+
+**[PSYCH]** (Marlatt & Gordon). After a lapse, attributing it internally,
+stably, and globally ("I have no willpower, I always fail, this is who I am")
+is what converts a single lapse into a full relapse. **Design law: Carr's
+"there's no such thing as just one" (A10) is prevention framing only — it is
+never to be applied after an actual slip has occurred.** Post-slip, the app
+must use situational attribution ("that specific moment was hard") with zero
+catastrophizing. The app's existing slip-handling behavior already implements
+this; Freedom content must not contradict or undermine it.
+
+### C8. Deprivation reversal / mental-health gains
+
+**[MED]**. Parrott 1994/2012; Taylor, *BMJ* 2014; Cochrane 2021. These are the
+safest "Carr was right about this" facts available — quitting measurably
+reduces anxiety, depression, and stress rather than increasing it.
 
 ---
 
