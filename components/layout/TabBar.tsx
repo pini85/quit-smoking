@@ -23,6 +23,15 @@ const iconProps = {
   'aria-hidden': true,
 };
 
+/**
+ * Source of truth for the bar, in visual order. The FAB slot splits it:
+ * everything before `LEFT_COUNT` sits left of the craving button, the rest
+ * right of it. Uneven on purpose — three left, two right — which is exactly
+ * why each side gets its own equal-width flex container rather than five
+ * siblings sharing one row (see `TabBar`).
+ */
+const LEFT_COUNT = 3;
+
 const TABS: Tab[] = [
   {
     href: '/',
@@ -42,6 +51,20 @@ const TABS: Tab[] = [
         <path d="M4 19V5" />
         <path d="M4 19h16" />
         <path d="M7.5 15l3.5-4 3 2.5L20 7" />
+      </svg>
+    ),
+  },
+  {
+    href: '/freedom',
+    label: 'Freedom',
+    icon: (
+      <svg {...iconProps}>
+        {/* The door frame, and the floor it stands on. */}
+        <path d="M13.5 4.6h4V20" />
+        <path d="M4.5 20h2M13.5 20h6" />
+        {/* The door itself, swung open toward you. */}
+        <path d="M13.5 3.6 6.5 5.8V20h7z" />
+        <circle cx="10.6" cy="12.4" r="0.85" />
       </svg>
     ),
   },
@@ -77,19 +100,24 @@ function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
     <Link
       href={tab.href}
       aria-current={active ? 'page' : undefined}
-      className={`flex h-16 flex-1 flex-col items-center justify-center gap-1 transition-colors duration-[var(--dur-press)] ${
+      className={`flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-1 transition-colors duration-[var(--dur-press)] ${
         active ? 'text-primary-strong' : 'text-ink-muted'
       }`}
     >
       {tab.icon}
-      <span className="text-[11px] leading-none">{tab.label}</span>
+      {/* `min-w-0` above plus `truncate` here: on a 320px-wide phone three
+          labels no longer fit their third of the row, and without these the
+          widest one ("Progress") would push the whole bar — and the FAB with
+          it — off centre. */}
+      <span className="max-w-full truncate text-[11px] leading-none">{tab.label}</span>
     </Link>
   );
 }
 
 export function TabBar() {
   const pathname = usePathname();
-  const [today, progress, health, you] = TABS;
+  const left = TABS.slice(0, LEFT_COUNT);
+  const right = TABS.slice(LEFT_COUNT);
 
   return (
     <nav
@@ -97,8 +125,16 @@ export function TabBar() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
     >
       <div className="mx-auto flex h-16 max-w-md items-stretch px-1">
-        <TabLink tab={today} active={isActive(pathname, today.href)} />
-        <TabLink tab={progress} active={isActive(pathname, progress.href)} />
+        {/* Two equal-width groups flanking a fixed centre slot. The groups
+            are what keeps the FAB on the geometric centre of the bar: they
+            share the leftover width evenly no matter how many tabs each
+            holds, so three-on-the-left and two-on-the-right stays balanced.
+            (Five flat `flex-1` siblings would not — the FAB would drift.) */}
+        <div className="flex flex-1 items-stretch">
+          {left.map((tab) => (
+            <TabLink key={tab.href} tab={tab} active={isActive(pathname, tab.href)} />
+          ))}
+        </div>
 
         {/* Centre slot: the FAB sits in the gap, raised above the bar. */}
         <div className="relative w-20 shrink-0">
@@ -107,8 +143,11 @@ export function TabBar() {
           </div>
         </div>
 
-        <TabLink tab={health} active={isActive(pathname, health.href)} />
-        <TabLink tab={you} active={isActive(pathname, you.href)} />
+        <div className="flex flex-1 items-stretch">
+          {right.map((tab) => (
+            <TabLink key={tab.href} tab={tab} active={isActive(pathname, tab.href)} />
+          ))}
+        </div>
       </div>
     </nav>
   );

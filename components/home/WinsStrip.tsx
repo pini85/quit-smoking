@@ -48,8 +48,8 @@ export function WinsStrip({ cravings }: WinsStripProps) {
     return (
       <Card>
         <p className="text-[14px] leading-relaxed text-ink-muted">
-          When a craving hits, the button below is the whole plan. It takes about 3
-          minutes.
+          When a craving hits, the button below is the move. It takes about 3
+          minutes. Freedom is for the time in between.
         </p>
       </Card>
     );

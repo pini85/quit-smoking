@@ -8,7 +8,7 @@ import { SessionRecovery } from '@/components/craving/SessionRecovery';
 import { AchievementTicker } from '@/components/providers/AchievementTicker';
 
 /** Full-bleed, single-purpose routes: no tab bar to pull attention away. */
-const IMMERSIVE_ROUTES = ['/craving', '/welcome'];
+const IMMERSIVE_ROUTES = ['/craving', '/welcome', '/brain'];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
