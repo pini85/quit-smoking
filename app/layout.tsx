@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppDataProvider } from "@/components/providers/AppDataProvider";
+import { AppGate } from "@/components/providers/AppGate";
 import { AppShell } from "@/components/layout/AppShell";
 import { Toaster } from "@/components/ui/Toast";
 
@@ -39,7 +40,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="min-h-full flex flex-col">
         <AppDataProvider>
-          <AppShell>{children}</AppShell>
+          <AppShell>
+            <AppGate>{children}</AppGate>
+          </AppShell>
           <Toaster />
         </AppDataProvider>
       </body>
