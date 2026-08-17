@@ -9,9 +9,9 @@ import { rankExercises } from '@/domain/freedom/lessonPicker';
 import { toLocalIso } from '@/lib/utils/iso';
 import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
-import { Chip } from '@/components/ui/Chip';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { showToast } from '@/components/ui/Toast';
+import { ConvictionRow } from './ConvictionRow';
 
 export type ExerciseSheetProps = {
   /** `null` closes the sheet — one nullable piece of state for the caller. */
@@ -21,20 +21,6 @@ export type ExerciseSheetProps = {
   store: DataStore;
   onClose: () => void;
 };
-
-/**
- * The five word anchors for the optional conviction question. Words, never
- * numbers: the reader is asked how a sentence sounds to them right now, and a
- * 0–4 scale would invite them to read it as a score of themselves. The
- * `strength` each one maps to is stored, never shown — here or anywhere.
- */
-const ANCHORS: { strength: 0 | 1 | 2 | 3 | 4; label: string }[] = [
-  { strength: 4, label: 'Still feels true' },
-  { strength: 3, label: 'Mostly true' },
-  { strength: 2, label: 'Starting to crack' },
-  { strength: 1, label: 'Mostly seen through' },
-  { strength: 0, label: 'Seen through' },
-];
 
 /**
  * One exercise, for one promise: the moment to catch, the question to put to
@@ -168,26 +154,11 @@ export function ExerciseSheet({
             Done
           </Button>
 
-          <div className="border-t border-border pt-4">
-            <p className="mb-2 text-[13px] text-ink-muted">
-              How convincing does it feel right now? &mdash; optional
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {ANCHORS.map((anchor) => (
-                <Chip
-                  key={anchor.strength}
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => void finish(anchor.strength)}
-                >
-                  {anchor.label}
-                </Chip>
-              ))}
-            </div>
-            <p className="mt-2 text-[12px] leading-relaxed text-ink-faint">
-              Whichever you tap closes this.
-            </p>
-          </div>
+          <ConvictionRow
+            disabled={saving}
+            onSelect={(strength) => void finish(strength)}
+            hint="Whichever you tap closes this."
+          />
         </div>
       ) : null}
     </Sheet>
