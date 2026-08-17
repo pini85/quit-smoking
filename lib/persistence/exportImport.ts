@@ -83,19 +83,23 @@ export async function applyImport(
 
   if (mode === 'replace') {
     const { summary } = mergeSnapshots(EMPTY_SNAPSHOT, importedSnapshot);
-    // TODO(export v2): the export format does not carry belief assessments or
-    // freedom sessions yet, so they are not part of `importedSnapshot`.
-    // `replace` means "discard current data entirely", so they go empty here;
-    // the next task teaches the format about both stores.
+    // TODO(export v2): DELETE this override when the export format learns the
+    // two new keys — leaving it will silently drop every imported belief
+    // assessment and freedom session, with no type error to catch it. Today
+    // the format carries neither, so they are absent from `importedSnapshot`
+    // and `replace` ("discard current data entirely") writes them empty.
     await repos.replaceAll({ ...importedSnapshot, beliefAssessments: [], freedomSessions: [] });
     return summary;
   }
 
   const current = await repos.readSnapshot();
   const { merged, summary } = mergeSnapshots(current, importedSnapshot);
-  // Same TODO as above — but `merge` must never destroy data the imported
-  // file simply doesn't know about, so the device's own rows are carried
-  // through untouched.
+  // TODO(export v2): DELETE these two overrides when `mergeSnapshots` learns
+  // the new keys — once `merged` carries correctly-unioned belief rows, these
+  // lines will silently discard every imported one, and nothing will fail to
+  // compile. They exist only because the format is blind to both stores
+  // today: `merge` must never destroy device data the imported file simply
+  // doesn't know about, so the device's own rows are carried through.
   await repos.replaceAll({
     ...merged,
     beliefAssessments: current.beliefAssessments,
