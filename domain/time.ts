@@ -51,15 +51,18 @@ const ISO_WITH_OFFSET =
  * place/time the event happened, NOT the current device timezone's hour.
  * ISO 8601 local date-time components already represent the wall clock at
  * whatever offset (or lack thereof) is present, so the hour is simply the
- * literal HH field of the string. Falls back to device-local parsing for
- * non-conforming input.
+ * literal HH field of the string ('Z', '+HH:MM', '-HH:MM', and no-offset are
+ * all supported this way). Throws on input that isn't a conforming ISO
+ * date-time string — callers must not rely on ambient/device timezone
+ * conversion here, so silently falling back to `new Date(iso).getHours()`
+ * (which is device-timezone-dependent) is deliberately not supported.
  */
 export function localHourOf(iso: string): number {
   const match = ISO_WITH_OFFSET.exec(iso);
-  if (match) {
-    return Number(match[1]);
+  if (!match) {
+    throw new Error(`localHourOf: not a conforming ISO date-time string: ${iso}`);
   }
-  return new Date(iso).getHours();
+  return Number(match[1]);
 }
 
 /** ISO week key (e.g. '2026-W34'), computed from device-local Y/M/D. */

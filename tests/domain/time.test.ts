@@ -88,8 +88,20 @@ describe('localHourOf', () => {
     expect(localHourOf('2026-08-17T21:30:00-05:30')).toBe(21);
   });
 
-  it('falls back to device-local parsing when the string has no offset', () => {
+  it('treats a string with no offset as already local (reads the literal hour)', () => {
     expect(localHourOf('2026-08-17T21:30:00')).toBe(21);
+  });
+
+  it('throws on a non-conforming ISO date-time string', () => {
+    expect(() => localHourOf('not-a-date')).toThrow(
+      /not a conforming ISO date-time string/
+    );
+  });
+
+  it('throws rather than silently falling back to device-timezone parsing', () => {
+    // A date-only string (no time component) is not a conforming
+    // date-time string for this function's contract.
+    expect(() => localHourOf('2026-08-17')).toThrow();
   });
 });
 
