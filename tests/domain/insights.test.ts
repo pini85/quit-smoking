@@ -46,7 +46,7 @@ describe('peak-hours', () => {
     const insight = rule.compute(sessions, quitAt, now);
     expect(insight).not.toBeNull();
     expect(insight?.text).toBe(
-      'Your cravings cluster between 19:00–22:00. A 9 pm craving is one you saw coming.'
+      'Your cravings cluster between 19:00–22:00. A 19:00 craving is one you saw coming.'
     );
     expect(insight?.priority).toBe(1);
     expect(insight?.id).toBe('peak-hours');
@@ -88,7 +88,9 @@ describe('peak-hours', () => {
     ];
     expect(sessions).toHaveLength(10);
     const insight = rule.compute(sessions, quitAt, now);
-    expect(insight?.text.startsWith('Your cravings cluster between 23:00–02:00.')).toBe(true);
+    expect(insight?.text).toBe(
+      'Your cravings cluster between 23:00–02:00. A 23:00 craving is one you saw coming.'
+    );
   });
 });
 
@@ -234,6 +236,23 @@ describe('frequency-decline', () => {
     const now = new Date(quitAt.getTime() + 22 * dayMs);
     const sessions = [...sessionsAt(0, 8), ...sessionsAt(7, 9), ...sessionsAt(14, 10)];
     expect(rule.compute(sessions, quitAt, now)).toBeNull();
+  });
+
+  it('with >= 4 elapsed full weeks, "at the start" is the QUIT week, not the first of the last-3 window', () => {
+    // 4 full weeks: quit week=20, then 10,10,10. The "last 3 full weeks"
+    // window is [10,10,10] (weeks 1-3), whose own first element is 10 — if
+    // the rule anchored "first" to that window instead of the quit week,
+    // the text would (wrongly) report 10, not 20.
+    const now = new Date(quitAt.getTime() + 29 * dayMs); // lands inside week 4 (partial, excluded)
+    const sessions = [
+      ...sessionsAt(0, 20), // full week 0 (quit week): 20
+      ...sessionsAt(7, 10), // full week 1: 10
+      ...sessionsAt(14, 10), // full week 2: 10
+      ...sessionsAt(21, 10), // full week 3 (latest full week): 10
+    ];
+    const insight = rule.compute(sessions, quitAt, now);
+    expect(insight).not.toBeNull();
+    expect(insight?.text).toBe('Cravings are becoming less frequent: 20/week at the start, 10/week now.');
   });
 
   it('stays silent below the 3-full-elapsed-weeks gate (only 2 full weeks)', () => {

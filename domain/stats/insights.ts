@@ -9,7 +9,7 @@
  */
 
 import type { CravingSession, Trigger } from '@/domain/types';
-import { isoWeekKey, startOfLocalWeek } from '@/domain/time';
+import { isoWeekKey } from '@/domain/time';
 import { TRIGGER_META } from '@/data/triggers';
 import {
   hardestWindow,
@@ -18,6 +18,7 @@ import {
   avgDurationSec,
   longestCravingFreeGapMs,
   resolvedSessions,
+  weeklyCounts,
 } from '@/domain/stats/cravingStats';
 
 export type InsightKind =
@@ -64,8 +65,10 @@ function triggerEntries(
  * display is `{startHour}:00–{endHour}:00` directly (no `+1`): e.g.
  * startHour=19, endHour=22 (exclusive, covering 19/20/21) reads as
  * "19:00–22:00", matching the brief's example text verbatim.
- * The second sentence is a FIXED string per the brief ("second sentence
- * fixed") — it does not vary with the actual peak hour.
+ * Per the controller's template amendment, the second sentence is
+ * window-derived (not a hardcoded "9 pm"): `A {start}:00 craving is one you
+ * saw coming.`, reusing the same zero-padded `startHour` as the first
+ * sentence.
  */
 const peakHoursRule: InsightRule = {
   kind: 'peak-hours',
@@ -77,9 +80,10 @@ const peakHoursRule: InsightRule = {
     if (window === null) return null;
     // 40% threshold via cross-multiplication to avoid float error: count/total >= 0.4 <=> count*5 >= total*2
     if (window.count * 5 < total * 2) return null;
+    const start = pad2(window.startHour);
     const text =
-      `Your cravings cluster between ${pad2(window.startHour)}:00–${pad2(window.endHour)}:00. ` +
-      `A 9 pm craving is one you saw coming.`;
+      `Your cravings cluster between ${start}:00–${pad2(window.endHour)}:00. ` +
+      `A ${start}:00 craving is one you saw coming.`;
     return { id: 'peak-hours', kind: 'peak-hours', text, priority: 1 };
   },
 };
@@ -169,37 +173,27 @@ const intensityDeclineRule: InsightRule = {
  * Rule 4 — frequency-decline (priority 4).
  * Gate: >= 3 full (fully-elapsed) ISO weeks since `quitAt` — the week
  * containing `now` is excluded as partial — with >= 1 session total across
- * those full weeks. Fires if the last 3 full weeks are monotonically
- * non-increasing, OR the latest full week is <= 70% of the FIRST full week
- * (the quit week — matches the text's "at the start"). The 70% comparison
- * is done via cross-multiplication (latest*10 <= first*7) to avoid float
- * error.
+ * those full weeks. Reuses `weeklyCounts` (which zero-fills from quitAt's
+ * week through now's week inclusive) and drops its last bucket, since a
+ * week containing `now` is necessarily still in progress.
+ * Fires if the last 3 full weeks are monotonically non-increasing, OR the
+ * latest full week is <= 70% of the FIRST full week. "First full week" is
+ * always `weeklyCounts`' first entry — i.e. the quit week itself, NOT the
+ * first of the "last 3" window — matching the text's "at the start"; this
+ * is disambiguated by a >= 4-elapsed-full-weeks test where the two
+ * readings would otherwise diverge. The 70% comparison is done via
+ * cross-multiplication (latest*10 <= first*7) to avoid float error.
  */
 const frequencyDeclineRule: InsightRule = {
   kind: 'frequency-decline',
   minSessions: 1,
   compute(sessions, quitAt, now) {
-    // Local zero-filled per-ISO-week counts from quitAt's week through now's
-    // week, mirroring cravingStats.weeklyCounts's algorithm but stopping
-    // short of importing it just to re-filter — we need the raw per-week
-    // buckets to drop the (partial) current week, which weeklyCounts does
-    // not do. Grouping reuses `isoWeekKey`/`startOfLocalWeek`, not new math.
-    const counts = new Map<string, number>();
-    for (const s of sessions) {
-      const key = isoWeekKey(new Date(s.startedAt));
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-
-    const fullWeeks: number[] = [];
-    let cursor = startOfLocalWeek(quitAt);
-    const nowWeekStart = startOfLocalWeek(now);
-    while (cursor.getTime() < nowWeekStart.getTime()) {
-      const key = isoWeekKey(cursor);
-      fullWeeks.push(counts.get(key) ?? 0);
-      const next = new Date(cursor);
-      next.setDate(next.getDate() + 7);
-      cursor = next;
-    }
+    // Reuse weeklyCounts's zero-filled per-ISO-week buckets (quitAt's week
+    // through now's week inclusive) and drop the last entry — the week
+    // containing `now` — since it is necessarily partial/still-elapsing.
+    const fullWeeks = weeklyCounts(sessions, quitAt, now)
+      .slice(0, -1)
+      .map((w) => w.count);
 
     if (fullWeeks.length < 3) return null;
     const total = fullWeeks.reduce((a, b) => a + b, 0);
