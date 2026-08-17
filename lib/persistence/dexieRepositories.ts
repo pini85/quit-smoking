@@ -11,6 +11,19 @@ import type {
 
 const SINGLETON_ID = 'singleton';
 
+// `startedAt` / `createdAt` are ISO 8601 strings WITH a timezone offset, so
+// two records can carry different offsets. Dexie's `orderBy()` on a string
+// index compares code units, which is NOT chronological order across
+// differing offsets (e.g. "...T02:00:00-08:00" == 10:00 UTC sorts before
+// "...T10:00:00+09:00" == 01:00 UTC as strings, even though it's later in
+// time). Every chronological sort in this module goes through this one
+// helper so all call sites agree on what "ascending" means.
+function sortChronologically<T>(items: T[], isoField: (item: T) => string): T[] {
+  return [...items].sort(
+    (a, b) => new Date(isoField(a)).getTime() - new Date(isoField(b)).getTime()
+  );
+}
+
 function createProfileRepository(db: QuitDb): ProfileRepository {
   return {
     get() {
@@ -33,8 +46,9 @@ function createCravingRepository(db: QuitDb): CravingRepository {
     get(id) {
       return db.cravings.get(id);
     },
-    getAll() {
-      return db.cravings.orderBy('startedAt').toArray();
+    async getAll() {
+      const rows = await db.cravings.toArray();
+      return sortChronologically(rows, (c) => c.startedAt);
     },
     getOpen() {
       return db.cravings.filter((c) => c.outcome == null).toArray();
@@ -60,8 +74,9 @@ function createAchievementRepository(db: QuitDb): AchievementRepository {
 
 function createReasonRepository(db: QuitDb): ReasonRepository {
   return {
-    getAll() {
-      return db.reasons.orderBy('createdAt').toArray();
+    async getAll() {
+      const rows = await db.reasons.toArray();
+      return sortChronologically(rows, (r) => r.createdAt);
     },
     async add(r) {
       await db.reasons.add(r);
@@ -116,16 +131,16 @@ export function createRepositories(db: QuitDb): Repositories {
         const [profileRow, cravingRows, achievementRows, reasonRows, preferencesRow] =
           await Promise.all([
             db.profile.get(SINGLETON_ID),
-            db.cravings.orderBy('startedAt').toArray(),
+            db.cravings.toArray(),
             db.achievementUnlocks.toArray(),
-            db.reasons.orderBy('createdAt').toArray(),
+            db.reasons.toArray(),
             db.preferences.get(SINGLETON_ID),
           ]);
         return {
           profile: profileRow ?? null,
-          cravings: cravingRows,
+          cravings: sortChronologically(cravingRows, (c) => c.startedAt),
           achievementUnlocks: achievementRows,
-          reasons: reasonRows,
+          reasons: sortChronologically(reasonRows, (r) => r.createdAt),
           preferences: preferencesRow ?? null,
         };
       });

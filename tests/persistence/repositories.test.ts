@@ -140,6 +140,30 @@ describe('CravingRepository', () => {
     expect(all.map((c) => c.id)).toEqual([early.id, mid.id, late.id]);
   });
 
+  it('getAll sorts by actual instant, not raw string comparison, across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    // These two share the same "clock digits" pattern that trips up naive
+    // string sorting: "...T02:00:00-08:00" is 10:00 UTC (later), while
+    // "...T10:00:00+09:00" is 01:00 UTC (earlier) — but as raw strings,
+    // "02" < "10" so a string sort would (wrongly) put the later instant
+    // first.
+    const laterInstantEarlyLookingString = makeCraving({
+      startedAt: '2026-01-01T02:00:00-08:00', // 2026-01-01T10:00:00Z
+    });
+    const earlierInstantLateLookingString = makeCraving({
+      startedAt: '2026-01-01T10:00:00+09:00', // 2026-01-01T01:00:00Z
+    });
+
+    await repos.cravings.add(laterInstantEarlyLookingString);
+    await repos.cravings.add(earlierInstantLateLookingString);
+
+    const all = await repos.cravings.getAll();
+    expect(all.map((c) => c.id)).toEqual([
+      earlierInstantLateLookingString.id,
+      laterInstantEarlyLookingString.id,
+    ]);
+  });
+
   it('getOpen returns only sessions with outcome == null', async () => {
     const repos = createRepositories(freshDb());
     const open1 = makeCraving({ outcome: null });
@@ -230,6 +254,29 @@ describe('ReasonRepository', () => {
     expect(all).toHaveLength(1);
     expect(all[0].text).toBe('Updated text');
   });
+
+  it('getAll sorts by actual instant, not raw string comparison, across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    // Same counterexample as the cravings test: "02" < "10" as strings, but
+    // -08:00 vs +09:00 flips which one is chronologically earlier.
+    const laterInstantEarlyLookingString = makeReason({
+      createdAt: '2026-01-01T02:00:00-08:00', // 2026-01-01T10:00:00Z
+    });
+    const earlierInstantLateLookingString = makeReason({
+      createdAt: '2026-01-01T10:00:00+09:00', // 2026-01-01T01:00:00Z
+    });
+
+    await repos.reasons.bulkPut([
+      laterInstantEarlyLookingString,
+      earlierInstantLateLookingString,
+    ]);
+
+    const all = await repos.reasons.getAll();
+    expect(all.map((r) => r.id)).toEqual([
+      earlierInstantLateLookingString.id,
+      laterInstantEarlyLookingString.id,
+    ]);
+  });
 });
 
 describe('PreferencesRepository', () => {
@@ -282,6 +329,23 @@ describe('readSnapshot', () => {
       reasons: [reason],
       preferences: prefs,
     });
+  });
+
+  it('sorts cravings and reasons by actual instant across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    // Same counterexample as the repository-level ordering tests: "02" <
+    // "10" as strings, but -08:00 vs +09:00 flips which instant is earlier.
+    const laterCraving = makeCraving({ startedAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
+    const earlierCraving = makeCraving({ startedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
+    const laterReason = makeReason({ createdAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
+    const earlierReason = makeReason({ createdAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
+
+    await repos.cravings.bulkPut([laterCraving, earlierCraving]);
+    await repos.reasons.bulkPut([laterReason, earlierReason]);
+
+    const snapshot = await repos.readSnapshot();
+    expect(snapshot.cravings.map((c) => c.id)).toEqual([earlierCraving.id, laterCraving.id]);
+    expect(snapshot.reasons.map((r) => r.id)).toEqual([earlierReason.id, laterReason.id]);
   });
 });
 
