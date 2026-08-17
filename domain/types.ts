@@ -63,6 +63,55 @@ export interface CravingSession {
   roundCount?: number; // defaults to 1 when absent
   preQuit?: boolean; // logged before quit moment (future quit date mode)
   notes?: string;
+  beliefId?: Belief; // what the craving felt like it was promising; tagged optionally after completion
+}
+
+export const BELIEFS = [
+  'relaxation',
+  'stress-relief',
+  'coffee-ritual',
+  'alcohol-pairing',
+  'meal-completion',
+  'concentration',
+  'boredom-relief',
+  'reward',
+  'break-permission',
+  'social-ease',
+  'confidence',
+  'identity',
+  'deprivation',
+  'just-one',
+  'miss-it-forever',
+  'always-want',
+  'life-worse',
+  'willpower-needed',
+] as const;
+export type Belief = (typeof BELIEFS)[number];
+
+export interface BeliefAssessment {
+  id: string; // uuid
+  beliefId: Belief;
+  assessedAt: string; // ISO WITH offset (toLocalIso)
+  strength: 0 | 1 | 2 | 3 | 4; // 4 = still fully convincing … 0 = seen through
+  context: 'brain' | 'exercise' | 'craving';
+  trigger?: Trigger;
+}
+
+// FreedomSession rows are written ONCE, at completion (endedAt is required).
+// A "brain" (belief-assessment) or "exercise" (lesson) flow that gets
+// abandoned mid-way writes nothing at all — there is no finalizer and no
+// 'unresolved' analog here. Contrast with CravingSession, which writes early
+// (outcome: null) and finalizes on abandonment, because losing a mid-crisis
+// craving session would poison the pass rate; a freedom-flow drop-off carries
+// no such cost, so it is simply not recorded.
+export interface FreedomSession {
+  id: string; // uuid
+  startedAt: string; // ISO WITH offset
+  endedAt: string; // ISO WITH offset — required; see write-once contract above
+  kind: 'brain' | 'exercise';
+  beliefId?: Belief;
+  trigger?: Trigger;
+  lessonId?: string; // 'exercise' kind
 }
 
 export type EvidenceLevel = 'strong' | 'moderate' | 'emerging';
@@ -168,4 +217,8 @@ export function isMilestoneCategory(x: unknown): x is MilestoneCategory {
     typeof x === 'string' &&
     (MILESTONE_CATEGORIES as readonly string[]).includes(x)
   );
+}
+
+export function isBelief(x: unknown): x is Belief {
+  return typeof x === 'string' && (BELIEFS as readonly string[]).includes(x);
 }
