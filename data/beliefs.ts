@@ -41,7 +41,12 @@ export interface BeliefMeta {
   /** First-person, present-tense quote of the belief in the smoker's own words. */
   promise: string;
   category: BeliefCategory;
-  /** Contexts this promise usually shows up in. Every entry is a real Trigger. */
+  /**
+   * Contexts this promise usually shows up in. Every entry is a real Trigger,
+   * never 'other' — that id is a "none of the above" user selection, not a
+   * context a belief attaches to. Beliefs the catalog marks as arising in "any"
+   * context list only the contexts where they most often surface.
+   */
   relatedTriggers: Trigger[];
   /** Section anchors in docs/research/freedom-principles.md that dismantle it. */
   principleRefs: string[];
@@ -70,7 +75,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'The coffee ritual',
     promise: 'A cigarette completes my coffee',
     category: 'ritual',
-    relatedTriggers: ['coffee', 'habit'],
+    relatedTriggers: ['coffee', 'habit', 'after-food'],
     principleRefs: ['A12', 'A3', 'C1'],
     sourceKind: 'psych',
   },
@@ -118,7 +123,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'The only real break',
     promise: 'A cigarette is my only real break',
     category: 'ritual',
-    relatedTriggers: ['habit', 'stress'],
+    relatedTriggers: ['habit', 'stress', 'coffee', 'boredom'],
     principleRefs: ['A12', 'A6', 'C2'],
     sourceKind: 'psych',
   },
@@ -134,7 +139,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'A harder case',
     promise: "I'm too addicted — it's harder for me than for other people",
     category: 'identity',
-    relatedTriggers: ['stress', 'emotional', 'other'],
+    relatedTriggers: ['stress', 'emotional'],
     principleRefs: ['A2', 'A17'],
     sourceKind: 'carr',
   },
@@ -150,7 +155,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'Losing something',
     promise: "I'm giving something up",
     category: 'fear',
-    relatedTriggers: ['emotional', 'habit', 'other'],
+    relatedTriggers: ['emotional', 'habit'],
     principleRefs: ['A7', 'A3'],
     sourceKind: 'carr',
   },
@@ -174,7 +179,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'Always wanting one',
     promise: "I'll always occasionally want one",
     category: 'fear',
-    relatedTriggers: ['seeing-smoking', 'habit', 'other'],
+    relatedTriggers: ['seeing-smoking', 'habit'],
     principleRefs: ['A15', 'A2'],
     sourceKind: 'psych',
   },
@@ -182,7 +187,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'A duller life',
     promise: 'Life will be less enjoyable without smoking',
     category: 'fear',
-    relatedTriggers: ['emotional', 'social', 'other'],
+    relatedTriggers: ['emotional', 'social'],
     principleRefs: ['A7', 'A3', 'A11'],
     sourceKind: 'carr',
   },
@@ -190,7 +195,7 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     label: 'Not having it in you',
     promise: "I don't have the willpower to quit",
     category: 'identity',
-    relatedTriggers: ['emotional', 'stress', 'other'],
+    relatedTriggers: ['emotional', 'stress'],
     principleRefs: ['A8', 'A17'],
     sourceKind: 'psych',
   },
@@ -228,8 +233,12 @@ export const BELIEF_ORDER: Belief[] = [
  * Ordered most-plausible-first: these become the "What was it promising?" chips
  * after a craving, and the pre-sort for the /brain flow when a trigger is known.
  *
- * 'other' and 'seeing-smoking' get the context-free beliefs — the ones that
- * arrive without needing a coffee or a bar to attach themselves to.
+ * 'other' is a user selection meaning "none of the above" — not "any context",
+ * and not a context any belief attaches to (no belief lists it in
+ * `relatedTriggers`). A craving the user couldn't categorise was still a craving
+ * minutes ago, so its list is the everyday in-the-moment promises rather than
+ * the long-run fears; those live in the /brain library, reachable via
+ * BELIEF_ORDER, and are asked about there rather than in the post-craving chips.
  */
 export const TRIGGER_BELIEF_SUGGESTIONS: Record<Trigger, Belief[]> = {
   stress: ['stress-relief', 'relaxation', 'break-permission'],
@@ -246,5 +255,5 @@ export const TRIGGER_BELIEF_SUGGESTIONS: Record<Trigger, Belief[]> = {
     'always-want',
     'deprivation',
   ],
-  other: ['always-want', 'deprivation', 'life-worse', 'just-one'],
+  other: ['relaxation', 'reward', 'break-permission', 'boredom-relief'],
 };

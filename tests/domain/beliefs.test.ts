@@ -116,14 +116,39 @@ describe('TRIGGER_BELIEF_SUGGESTIONS', () => {
     }
   );
 
-  it('leads each list with a belief that genuinely belongs to that trigger', () => {
+  it('leads each context list with a belief that genuinely belongs to it', () => {
     // Lists are ordered most-plausible-first, and the head is what the UI shows
     // in its most prominent chip slot. Later entries may legitimately be
-    // trigger-agnostic beliefs ("just one", "I miss smoking"), but the head must
+    // context-free beliefs ("just one", "I miss smoking"), but the head must
     // name the trigger among its own relatedTriggers.
-    for (const trigger of TRIGGERS) {
+    //
+    // 'other' is excluded by construction, not by convenience: it is the "none
+    // of the above" selection rather than a context, so no belief lists it (see
+    // the test below) and no belief could head it. Its own contents are
+    // asserted separately.
+    for (const trigger of TRIGGERS.filter((t) => t !== 'other')) {
       const [head] = TRIGGER_BELIEF_SUGGESTIONS[trigger];
       expect(BELIEF_META[head].relatedTriggers).toContain(trigger);
+    }
+  });
+
+  it('treats "other" as a non-context: no belief claims it as a related trigger', () => {
+    // 'other' means "none of the above" — a user saying they couldn't place the
+    // craving. Tagging beliefs with it would encode it as a context they arise
+    // in, which is what produced an early draft's implausible chip list.
+    for (const id of BELIEFS) {
+      expect(BELIEF_META[id].relatedTriggers).not.toContain('other');
+    }
+  });
+
+  it('offers "other" the in-the-moment promises, not the long-run fears', () => {
+    // An uncategorised craving was still a craving minutes ago, so its chips
+    // must be answers to "what was it promising?" — relief, reward, a break —
+    // rather than beliefs about how life will feel in a year. The 'fear'
+    // category is exactly that long-run cluster, and belongs in the /brain
+    // library instead.
+    for (const belief of TRIGGER_BELIEF_SUGGESTIONS.other) {
+      expect(BELIEF_META[belief].category).not.toBe('fear');
     }
   });
 });
