@@ -30,7 +30,7 @@ export function GatedCard({ title, gateMet, emptyCopy, children }: GatedCardProp
   return (
     <Card className="flex flex-col gap-4">
       <h2 className="text-[17px] font-semibold tracking-tight text-ink">{title}</h2>
-      {gateMet ? children : <EmptyState>{emptyCopy}</EmptyState>}
+      {gateMet ? children : <EmptyState bare>{emptyCopy}</EmptyState>}
     </Card>
   );
 }
