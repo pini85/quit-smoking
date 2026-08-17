@@ -11,12 +11,25 @@ import { TRIGGERS, OUTCOMES } from '@/domain/types';
 import { ImportError } from '@/domain/export/migrate';
 import type { ExportFileV1 } from '@/domain/export/format';
 
+// Every `*At` field in the domain is documented as "ISO 8601 WITH timezone
+// offset". `Date.parse` alone is far too permissive — engines also accept
+// bare year/day numbers ("2026", "5") with implementation-defined meaning —
+// so a shape check runs first to require a full date-time component before
+// Date.parse is even consulted for validity.
+const ISO_DATE_TIME_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
+
+function isIsoDateTimeShaped(s: string): boolean {
+  return ISO_DATE_TIME_RE.test(s);
+}
+
 function isParseableDate(s: string): boolean {
   return !Number.isNaN(Date.parse(s));
 }
 
 const dateString = z.string().check(
   z.minLength(1, 'must not be empty'),
+  z.refine(isIsoDateTimeShaped, 'must be an ISO 8601 date-time string (YYYY-MM-DDTHH:mm:ss)'),
   z.refine(isParseableDate, 'must be a valid date string')
 );
 
@@ -81,7 +94,7 @@ const preferencesSchema = z.object({
 const exportFileV1Schema = z.object({
   schemaVersion: z.literal(1),
   app: z.literal('quit-smoking'),
-  exportedAt: z.string(),
+  exportedAt: dateString,
   profile: z.nullable(quitProfileSchema),
   cravings: z.array(cravingSessionSchema),
   achievementUnlocks: z.array(achievementUnlockSchema),
@@ -96,5 +109,5 @@ export function validateExportFile(migrated: unknown): ExportFileV1 {
     const path = firstIssue.path.length > 0 ? firstIssue.path.join('.') : '(root)';
     throw new ImportError(`Invalid export file at "${path}": ${firstIssue.message}`);
   }
-  return result.data as ExportFileV1;
+  return result.data;
 }

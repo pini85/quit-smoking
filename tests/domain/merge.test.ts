@@ -79,6 +79,22 @@ describe('mergeSnapshots — union with id-collision keeping current', () => {
     expect(summary.totalCravingsAfter).toBe(1);
   });
 
+  it('collapses duplicate ids WITHIN the imported array itself: first copy kept, second dropped and not counted as new', () => {
+    const current = emptySnapshot();
+    const imported = emptySnapshot({
+      cravings: [
+        craving({ id: 'dup', notes: 'first copy' }),
+        craving({ id: 'dup', notes: 'second copy' }),
+      ],
+    });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.cravings).toHaveLength(1);
+    expect(merged.cravings[0].notes).toBe('first copy');
+    expect(summary.newCravings).toBe(1);
+  });
+
   it('unions achievement unlocks by id, keeping current on collision', () => {
     const current = emptySnapshot({
       achievementUnlocks: [unlock({ id: 'shared', unlockedAt: '2026-01-01T08:00:00Z' })],

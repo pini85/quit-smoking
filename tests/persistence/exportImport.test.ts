@@ -89,6 +89,64 @@ async function seed(repos: Repositories) {
   return { profile, craving, unlock, reason, prefs };
 }
 
+/**
+ * Seeds one row of each kind with EVERY optional field populated, using
+ * object-literal key order that matches the domain type declarations (and
+ * therefore the validation schema's shape order) field-for-field. This
+ * matters because zod/mini's parsed output orders keys by the schema's
+ * declared shape, not by the input's key order — so a byte-equality check
+ * across a validate-then-reserialize round trip is only meaningful if the
+ * pre-import object's key order already matches that canonical order.
+ */
+async function seedFullyPopulated(repos: Repositories) {
+  const profile: QuitProfile = {
+    id: 'singleton',
+    quitAt: '2026-01-01T08:00:00Z',
+    cigarettesPerDay: 20,
+    cigarettesPerPack: 20,
+    packPrice: 10,
+    currency: 'EUR',
+    yearsSmoked: 15,
+    createdAt: '2026-01-01T08:00:00Z',
+    updatedAt: '2026-01-01T08:00:00Z',
+  };
+  const craving: CravingSession = {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-01T08:00:00Z',
+    initialIntensity: 7,
+    finalIntensity: 2,
+    trigger: 'stress',
+    outcome: 'passed',
+    endedAt: '2026-01-01T08:10:00Z',
+    interventionIds: ['breathing', 'walk'],
+    roundCount: 2,
+    preQuit: false,
+    notes: 'handled it',
+  };
+  const unlock = makeUnlock();
+  const reason: PersonalReason = {
+    id: crypto.randomUUID(),
+    text: 'For my health',
+    createdAt: '2026-01-01T08:00:00Z',
+    archived: true,
+  };
+  const prefs: Preferences = {
+    id: 'singleton',
+    theme: 'dark',
+    moneyEquivalents: [{ label: 'coffee', unitPrice: 3.5 }],
+    showEmergingEvidence: true,
+    dismissedInstallHint: true,
+    lastExportAt: '2026-01-04T08:00:00Z',
+    updatedAt: '2026-01-04T08:00:00Z',
+  };
+  await repos.profile.save(profile);
+  await repos.cravings.add(craving);
+  await repos.achievements.addUnlocks([unlock]);
+  await repos.reasons.add(reason);
+  await repos.preferences.save(prefs);
+  return { profile, craving, unlock, reason, prefs };
+}
+
 describe('exportData', () => {
   it('produces pretty-printed JSON with the correct file name', async () => {
     const repos = freshRepos();
@@ -139,6 +197,25 @@ describe('export -> erase -> import(replace) roundtrip', () => {
       reasons: [seeded.reason],
       preferences: seeded.prefs,
     });
+  });
+
+  it('re-export after a replace-import is byte-identical JSON to the original export, for a fully-populated snapshot', async () => {
+    const repos = freshRepos();
+    await seedFullyPopulated(repos);
+
+    const before = await exportData(repos, new Date('2026-01-05T12:00:00Z'));
+    await repos.clearAll();
+
+    const { file } = await previewImport(repos, before.json);
+    await applyImport(repos, file, 'replace');
+
+    const after = await exportData(repos, new Date('2026-01-05T12:00:00Z'));
+
+    // True string equality, not just deep-equal parsed objects: this catches
+    // a field silently becoming `undefined` (and therefore omitted by
+    // JSON.stringify) somewhere in the validate-then-reserialize path, which
+    // toEqual on parsed objects would not distinguish from "field absent".
+    expect(after.json).toBe(before.json);
   });
 });
 

@@ -90,6 +90,49 @@ describe('validateExportFile — happy path', () => {
   });
 });
 
+describe('validateExportFile — date fields require full ISO 8601 date-time shape', () => {
+  it('rejects a bare year like "2026" even though Date.parse accepts it', () => {
+    expect(Number.isNaN(Date.parse('2026'))).toBe(false); // sanity: Date.parse is lenient
+    const raw = validFile({ profile: { ...validProfile, quitAt: '2026' } } as unknown as Partial<ExportFileV1>);
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+
+  it('rejects a bare number-as-string like "5" even though Date.parse accepts it', () => {
+    expect(Number.isNaN(Date.parse('5'))).toBe(false); // sanity: Date.parse is lenient
+    const raw = validFile({ profile: { ...validProfile, createdAt: '5' } } as unknown as Partial<ExportFileV1>);
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+
+  it('rejects a date-only string (no time component)', () => {
+    const raw = validFile({ profile: { ...validProfile, updatedAt: '2026-01-01' } } as unknown as Partial<ExportFileV1>);
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+
+  it('accepts a full date-time with fractional seconds and a Z offset', () => {
+    const raw = validFile({
+      profile: { ...validProfile, quitAt: '2026-01-01T08:00:00.123Z' },
+    } as unknown as Partial<ExportFileV1>);
+    expect(() => validateExportFile(raw)).not.toThrow();
+  });
+
+  it('accepts a full date-time with a +HH:MM offset', () => {
+    const raw = validFile({
+      profile: { ...validProfile, quitAt: '2026-01-01T08:00:00+02:00' },
+    } as unknown as Partial<ExportFileV1>);
+    expect(() => validateExportFile(raw)).not.toThrow();
+  });
+
+  it('rejects an unparseable exportedAt at the top level', () => {
+    const raw = validFile({ exportedAt: 'not-a-date' as string });
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+
+  it('rejects a bare-year exportedAt at the top level', () => {
+    const raw = validFile({ exportedAt: '2026' as string });
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+});
+
 describe('validateExportFile — rejects corruption', () => {
   it('throws ImportError when schemaVersion is not literal 1', () => {
     expect(() => validateExportFile(validFile({ schemaVersion: 2 as 1 }))).toThrow(ImportError);
