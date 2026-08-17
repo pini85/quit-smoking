@@ -7,13 +7,23 @@ import { computeMilestoneStates } from '@/domain/milestones/engine';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
 import { Card } from '@/components/ui/Card';
+import { SegmentedControl, type SegmentedOption } from '@/components/ui/SegmentedControl';
 import { MilestoneSheet } from '@/components/health/MilestoneSheet';
-import { Hero } from '@/components/home/Hero';
-import { StatsRow } from '@/components/home/StatsRow';
-import { BodyNowCarousel, PreQuitPrepCard } from '@/components/home/BodyNowCarousel';
-import { WinsStrip } from '@/components/home/WinsStrip';
-import { DiscoveryCard } from '@/components/home/DiscoveryCard';
-import { SlipCheckinCard } from '@/components/home/SlipCheckinCard';
+import { RightNowView } from '@/components/health/RightNowView';
+import { TimelineView } from '@/components/health/TimelineView';
+import { BodyExplorerView } from '@/components/health/BodyExplorerView';
+
+type Segment = 'right-now' | 'timeline' | 'body';
+
+const SEGMENTS: SegmentedOption[] = [
+  { id: 'right-now', label: 'Right now' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'body', label: 'Body' },
+];
+
+function isSegment(id: string): id is Segment {
+  return id === 'right-now' || id === 'timeline' || id === 'body';
+}
 
 function Skeleton() {
   return (
@@ -26,23 +36,21 @@ function Skeleton() {
 }
 
 /**
- * Today — the screen that has to make quitting feel alive.
- *
- * The clock is split deliberately: this page ticks once a minute, and only
- * `<Hero>` subscribes to the one-second clock, so the per-second re-render
- * never reaches the stats, the carousel or the cards below.
+ * "Your recovery" — the three ways of looking at the same milestone data:
+ * what's happening right now, the full timeline of it, and a browsable map
+ * of the body. All three read from one `states` computation so they can
+ * never disagree with each other about what's achieved.
  */
-export default function TodayPage() {
+export default function HealthPage() {
   const { data } = useAppData();
   const now = useNow(60000);
+  const [segment, setSegment] = useState<Segment>('right-now');
   const [sheetMilestone, setSheetMilestone] = useState<HealthMilestone | null>(null);
 
   const profile = data.profile;
   const quitAtMs = profile ? new Date(profile.quitAt).getTime() : null;
   const minuteKey = Math.floor(now.getTime() / 60_000);
 
-  // Recomputed once a minute (not once a render) — 80 milestone states is
-  // cheap but not free, and every section below reads the same list.
   const states = useMemo(() => {
     if (quitAtMs === null) return [];
     return computeMilestoneStates(
@@ -63,31 +71,39 @@ export default function TodayPage() {
   return (
     <>
       <div className="flex flex-col gap-4 pt-2">
-        <Hero quitAt={quitAt} onOpenMilestone={setSheetMilestone} />
+        <h1 className="text-[24px] font-semibold tracking-tight text-ink">Your recovery</h1>
 
-        {preQuit ? null : (
-          <StatsRow
-            profile={profile}
-            now={now}
-            moneyEquivalents={data.preferences?.moneyEquivalents}
-          />
-        )}
+        <SegmentedControl
+          options={SEGMENTS}
+          value={segment}
+          onChange={(id) => {
+            if (isSegment(id)) setSegment(id);
+          }}
+          label="Health view"
+        />
 
-        {preQuit ? (
-          <PreQuitPrepCard />
-        ) : (
-          <BodyNowCarousel
+        {segment === 'right-now' ? (
+          <RightNowView
             states={states}
             showEmergingEvidence={showEmergingEvidence}
+            preQuit={preQuit}
             onOpenMilestone={setSheetMilestone}
           />
-        )}
+        ) : null}
 
-        <WinsStrip cravings={data.cravings} />
+        {segment === 'timeline' ? (
+          <TimelineView
+            states={states}
+            showEmergingEvidence={showEmergingEvidence}
+            quitAt={quitAt}
+            now={now}
+            onOpenMilestone={setSheetMilestone}
+          />
+        ) : null}
 
-        <DiscoveryCard now={now} onOpenMilestone={setSheetMilestone} />
-
-        <SlipCheckinCard cravings={data.cravings} now={now} />
+        {segment === 'body' ? (
+          <BodyExplorerView states={states} showEmergingEvidence={showEmergingEvidence} />
+        ) : null}
       </div>
 
       <MilestoneSheet
