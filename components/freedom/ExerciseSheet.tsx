@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Belief, BeliefAssessment, CravingSession } from '@/domain/types';
 import type { DataStore } from '@/lib/services/dataStore';
 import { beliefPromise } from '@/data/beliefs';
-import { FREEDOM_LESSONS } from '@/data/freedomLessons';
+import { FREEDOM_LESSONS, localizedLesson } from '@/data/freedomLessons';
 import { rankExercises } from '@/domain/freedom/lessonPicker';
 import { toLocalIso } from '@/lib/utils/iso';
 import { Sheet } from '@/components/ui/Sheet';
@@ -121,9 +121,11 @@ export function ExerciseSheet({
     }
   }
 
+  const text = lesson !== null ? localizedLesson(lesson, locale) : null;
+
   return (
-    <Sheet open={beliefId !== null} onClose={onClose} title={lesson?.title}>
-      {beliefId !== null && lesson !== null ? (
+    <Sheet open={beliefId !== null} onClose={onClose} title={text?.title}>
+      {beliefId !== null && lesson !== null && text !== null ? (
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[13px] leading-relaxed text-ink-faint">
             {interpolate(m.freedom.exercise.promiseLabel, {
@@ -131,20 +133,20 @@ export function ExerciseSheet({
             })}
           </p>
 
-          {lesson.notice ? (
+          {text.notice ? (
             <div>
               <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
                 {lesson.kind === 'exercise'
                   ? m.freedom.exercise.momentToCatch
                   : m.freedom.exercise.worthNoticing}
               </p>
-              <p className="mt-1 text-[15px] leading-relaxed text-ink">{lesson.notice}</p>
+              <p className="mt-1 text-[15px] leading-relaxed text-ink">{text.notice}</p>
             </div>
           ) : null}
 
-          {lesson.reflect ? (
+          {text.reflect ? (
             <p className="rounded-card bg-primary-soft px-4 py-3 text-[15px] leading-relaxed text-ink">
-              {lesson.reflect}
+              {text.reflect}
             </p>
           ) : null}
 
@@ -154,7 +156,7 @@ export function ExerciseSheet({
                 ? m.freedom.exercise.whatTurnsOutTrue
                 : m.freedom.exercise.theIdea}
             </p>
-            <p className="mt-1 text-[15px] leading-relaxed text-ink-muted">{lesson.idea}</p>
+            <p className="mt-1 text-[15px] leading-relaxed text-ink-muted">{text.idea}</p>
           </div>
 
           <SourceBadge kind={lesson.sourceKind} className="self-start" />

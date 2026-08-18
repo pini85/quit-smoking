@@ -3,10 +3,10 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import type { BeliefAssessment, CravingSession } from '@/domain/types';
-import { FREEDOM_LESSONS } from '@/data/freedomLessons';
+import { FREEDOM_LESSONS, localizedLesson } from '@/data/freedomLessons';
 import { pickDailyBooster } from '@/domain/freedom/lessonPicker';
 import { startOfLocalDay } from '@/domain/time';
-import { interpolate, useMessages } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 
 export type FreedomCardProps = {
@@ -39,6 +39,7 @@ export type FreedomCardProps = {
  */
 export function FreedomCard({ assessments, cravings, now }: FreedomCardProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   // Memoised on the local DAY, not on `now`: Today ticks once a minute and the
   // teaser must not shuffle under the reader. Same reasoning (and the same
   // local-midnight instant) as `BoosterCard`.
@@ -77,7 +78,9 @@ export function FreedomCard({ assessments, cravings, now }: FreedomCardProps) {
           {/* `min-w-0` is what actually lets `truncate` bite: a flex item
               won't shrink below its content width without it. */}
           <span className="min-w-0 truncate">
-            {interpolate(m.home.freedomCard.booster, { title: lesson.title })}
+            {interpolate(m.home.freedomCard.booster, {
+              title: localizedLesson(lesson, locale).title,
+            })}
           </span>
           <span aria-hidden="true" className="ml-1 shrink-0 text-primary-strong">
             &rarr;

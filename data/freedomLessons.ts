@@ -27,7 +27,8 @@
  * Pure data: no React, no clock, no emoji.
  */
 
-import type { Belief, Trigger } from '@/domain/types';
+import type { Belief, Locale, Trigger } from '@/domain/types';
+import { FI_FREEDOM_LESSON_TEXT } from './fi/freedomLessons';
 
 export type FreedomLessonKind = 'booster' | 'exercise';
 
@@ -314,3 +315,17 @@ export const FREEDOM_LESSONS: FreedomLesson[] = [
     principleRefs: ['A8', 'A17'],
   },
 ];
+
+export type LocalizedLessonText = Pick<FreedomLesson, 'title' | 'idea' | 'notice' | 'reflect'>;
+
+/**
+ * Text-only localized view of a lesson: same id/kind/beliefIds/etc, only
+ * title/idea/notice/reflect swapped for the Finnish overlay. Falls back to
+ * the English lesson's own fields when no Finnish text exists for an id, so
+ * this is always safe to call.
+ */
+export function localizedLesson(lesson: FreedomLesson, locale: Locale = 'en'): LocalizedLessonText {
+  if (locale !== 'fi') return lesson;
+  const fi = FI_FREEDOM_LESSON_TEXT[lesson.id];
+  return fi ?? lesson;
+}

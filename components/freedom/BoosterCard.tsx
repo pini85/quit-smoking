@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import type { BeliefAssessment, CravingSession } from '@/domain/types';
-import { FREEDOM_LESSONS } from '@/data/freedomLessons';
+import { FREEDOM_LESSONS, localizedLesson } from '@/data/freedomLessons';
 import { pickDailyBooster } from '@/domain/freedom/lessonPicker';
 import { daysSinceEpoch, startOfLocalDay } from '@/domain/time';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
-import { useMessages } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 
@@ -36,6 +36,7 @@ export type BoosterCardProps = {
  */
 export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const { value: dismissedOn, set: setDismissedOn } = useLocalPref(STORAGE_KEY);
   const [expanded, setExpanded] = useState(false);
 
@@ -62,6 +63,8 @@ export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
   if (dismissedOn === undefined || lesson === null || dismissedOn === today) {
     return null;
   }
+
+  const text = localizedLesson(lesson, locale);
 
   return (
     <Card className="flex flex-col gap-2">
@@ -90,24 +93,24 @@ export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
         </button>
       </div>
 
-      <p className="text-[15px] font-semibold leading-snug text-ink">{lesson.title}</p>
+      <p className="text-[15px] font-semibold leading-snug text-ink">{text.title}</p>
 
       {expanded ? (
         <div className="flex flex-col gap-3 pt-1">
-          <p className="text-[14px] leading-relaxed text-ink-muted">{lesson.idea}</p>
+          <p className="text-[14px] leading-relaxed text-ink-muted">{text.idea}</p>
 
-          {lesson.notice ? (
+          {text.notice ? (
             <div>
               <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
                 {m.freedom.booster.worthNoticing}
               </p>
-              <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">{lesson.notice}</p>
+              <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">{text.notice}</p>
             </div>
           ) : null}
 
-          {lesson.reflect ? (
+          {text.reflect ? (
             <p className="rounded-card bg-primary-soft px-4 py-3 text-[14px] leading-relaxed text-ink">
-              {lesson.reflect}
+              {text.reflect}
             </p>
           ) : null}
 

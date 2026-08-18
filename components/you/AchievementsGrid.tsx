@@ -8,7 +8,7 @@ import type {
   CravingSession,
   QuitProfile,
 } from '@/domain/types';
-import { ACHIEVEMENT_DEFINITIONS } from '@/domain/achievements/definitions';
+import { ACHIEVEMENT_DEFINITIONS, localizedAchievement } from '@/domain/achievements/definitions';
 import { progressToward, type AchievementContext } from '@/domain/achievements/engine';
 import { triggerLabel } from '@/data/triggers';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
@@ -82,7 +82,7 @@ function AchievementTile({
         className="flex min-h-[104px] flex-col justify-between gap-2 rounded-card border border-primary bg-primary-soft p-3 text-left transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
       >
         <span className="text-[13px] font-semibold leading-snug text-primary-strong">
-          {def.title}
+          {localizedAchievement(def, locale).title}
         </span>
         <span className="text-[11px] text-ink-faint">
           {dateFmt(locale, { dateStyle: 'short' }).format(new Date(unlockedAt))}
@@ -100,7 +100,9 @@ function AchievementTile({
 
   return (
     <div className="flex min-h-[104px] flex-col justify-between gap-2 rounded-card border border-border bg-surface p-3 text-left">
-      <span className="text-[13px] font-semibold leading-snug text-ink-muted">{def.title}</span>
+      <span className="text-[13px] font-semibold leading-snug text-ink-muted">
+        {localizedAchievement(def, locale).title}
+      </span>
       <div className="flex flex-col gap-1.5">
         <span className="text-[11px] leading-snug text-ink-muted">
           {criteriaText(def.condition, m.you.achievements, locale)}
@@ -167,10 +169,16 @@ export function AchievementsGrid({ profile, cravings, unlocks, store, now }: Ach
         ))}
       </div>
 
-      <Sheet open={openDef !== null} onClose={() => setOpenId(null)} title={openDef?.title}>
+      <Sheet
+        open={openDef !== null}
+        onClose={() => setOpenId(null)}
+        title={openDef ? localizedAchievement(openDef, locale).title : undefined}
+      >
         {openDef && openUnlockedAt ? (
           <div className="flex flex-col gap-3 pb-2">
-            <p className="text-[15px] leading-relaxed text-ink-muted">{openDef.fact}</p>
+            <p className="text-[15px] leading-relaxed text-ink-muted">
+              {localizedAchievement(openDef, locale).fact}
+            </p>
             <p className="text-[13px] text-ink-faint">
               {interpolate(m.you.achievements.unlockedOn, {
                 date: dateFmt(locale, { dateStyle: 'medium' }).format(new Date(openUnlockedAt)),

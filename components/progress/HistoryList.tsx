@@ -6,7 +6,7 @@ import { dateFmt } from '@/lib/i18n/fmt';
 import { interpolate, useLocale, useMessages, type Messages } from '@/lib/i18n';
 import { beliefLabel } from '@/data/beliefs';
 import { triggerLabel } from '@/data/triggers';
-import { INTERVENTIONS } from '@/data/interventions';
+import { INTERVENTIONS, localizedIntervention, type InterventionKind } from '@/data/interventions';
 import { formatDurationDigital } from '@/domain/time';
 import { Card } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
@@ -161,7 +161,11 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
               value={
                 selected.interventionIds && selected.interventionIds.length > 0
                   ? selected.interventionIds
-                      .map((id) => INTERVENTIONS.find((i) => i.id === id)?.title ?? id)
+                      .map((id) =>
+                        INTERVENTIONS.some((i) => i.id === id)
+                          ? localizedIntervention(id as InterventionKind, locale).title
+                          : id
+                      )
                       .join(', ')
                   : m.progress.history.none
               }

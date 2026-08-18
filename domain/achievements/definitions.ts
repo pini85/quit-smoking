@@ -5,7 +5,8 @@
  * for how conditions are evaluated.
  */
 
-import type { AchievementDefinition } from '@/domain/types';
+import type { AchievementDefinition, Locale } from '@/domain/types';
+import { FI_ACHIEVEMENT_TEXT } from '@/data/fi/achievements';
 
 export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
   // --- Time (smoke-free-hours, measured from quitAt) ---
@@ -232,3 +233,12 @@ export const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
     tier: 1,
   },
 ];
+
+/** Localized {title, fact} for an achievement definition. */
+export function localizedAchievement(
+  def: AchievementDefinition,
+  locale: Locale = 'en'
+): { title: string; fact: string } {
+  if (locale !== 'fi') return def;
+  return FI_ACHIEVEMENT_TEXT[def.id] ?? def;
+}
