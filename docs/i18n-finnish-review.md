@@ -56,13 +56,33 @@ survived translation with the right register. That's what native review is for.
 - `lib/i18n/messages/fi/*.ts` — all UI chrome, button labels, empty states,
   toasts, sheet titles. Lower stakes individually, but there are ~300+
   strings across `chrome`, `home`, `craving`, `freedom`, `brain`, `welcome`,
-  `you`, `progress`, `health`, `common`. Spot-check for: awkward literal
-  translations, incorrect Finnish grammatical case on interpolated values
-  (e.g. `{count}` placeholders), and any string that reads like a direct
-  English calque rather than natural Finnish phrasing.
+  `you`, `progress`, `health`, `common`, `sleep`. Spot-check for: awkward
+  literal translations, incorrect Finnish grammatical case on interpolated
+  values (e.g. `{count}` placeholders), and any string that reads like a
+  direct English calque rather than natural Finnish phrasing.
+  - `lib/i18n/messages/fi/sleep.ts` (~55 strings, snore-monitoring feature):
+    an editorial pass has already fixed the disclaimer fragment ("Ei ole
+    lääkinnällinen laite." → "Tämä ei ole lääkinnällinen laite. Se ei
+    havaitse...") and reworded the awkward `results.vsBaselineFlat` line
+    ("≈ lähtötasosi mukainen" → "≈ ennallaan lähtötasoosi verrattuna", which
+    also aligns it with the "ennallaan ... verrattuna" pattern already used
+    in `trends.delta.unchangedSincePreQuit`/`unchangedSinceFirstNights`).
+    Terminology (kuorsaus/kuorsausjakso/kuorsausrasitus) was checked for
+    consistency against the rest of the file. Still needs a native-speaker
+    pass like every other namespace here.
 - `data/fi/{triggers,categoryMeta,interventions}.ts` — short labels and
   intervention titles/taglines/prompts. Lower risk (short, concrete), but
   still unreviewed.
+
+## Known inconsistency to resolve
+
+- Percent-sign spacing is inconsistent across namespaces: `fi/sleep.ts` writes
+  `'{percent} %'` (space before the sign, standard Finnish typography), while
+  `fi/progress.ts`'s `triggers.subLine` writes `'{pct}%'` (no space, following
+  the English convention). Finnish style guides (e.g. Kielitoimiston
+  ohjepankki) call for a space before `%`. `progress.ts` was left as-is here
+  (out of scope for this pass) but should be reviewed and reconciled — likely
+  by adding the space — during the Priority 3 native-speaker review.
 
 ## Out of scope for this review
 

@@ -1,7 +1,7 @@
 export const sleep = {
   pageTitle: 'Kuorsausseuranta',
   disclaimer:
-    'Ei ole lääkinnällinen laite. Tämä ei havaitse uniapneaa eikä diagnosoi mitään — se vain vertaa öitäsi omaan lähtötasoosi.',
+    'Tämä ei ole lääkinnällinen laite. Se ei havaitse uniapneaa eikä diagnosoi mitään — se vain vertaa öitäsi omaan lähtötasoosi.',
   webDevNote: 'Kehitystallennin: pidä tämä välilehti auki — sen sulkeminen tai vaihtaminen keskeyttää tallennuksen.',
   unavailable: {
     title: 'Kuorsausseuranta ei ole käytettävissä tässä',
@@ -67,7 +67,7 @@ export const sleep = {
     },
     vsBaselineDown: '↓ {percent} % lähtötasoosi verrattuna',
     vsBaselineUp: '↑ {percent} % lähtötasoosi verrattuna',
-    vsBaselineFlat: '≈ lähtötasosi mukainen',
+    vsBaselineFlat: '≈ ennallaan lähtötasoosi verrattuna',
   },
   trends: {
     title: 'Kuorsauksen kehitys',
