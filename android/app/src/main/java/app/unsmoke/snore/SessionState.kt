@@ -138,6 +138,25 @@ object SessionStateCodec {
         )
 
     /**
+     * Returns [SessionState.IDLE] if [state]'s `sessionId` matches
+     * [sessionId], or [state] UNCHANGED otherwise (a no-op).
+     *
+     * This is the "read-check" half of [SessionStore.clearIfMatches]'s
+     * TOCTOU-safe clear (`deleteSessionAudio`): factored out here, as a pure
+     * function of an already-read [state], specifically so it is
+     * unit-testable on the plain JVM (see `SessionStoreTest`'s
+     * `clearIfMatches` cases) without any `SharedPreferences` dependency.
+     * The mismatch case matters because a concurrent `startRecording(newId)`
+     * can land between `deleteSessionAudio`'s own status read and its clear
+     * call — clearing unconditionally would silently wipe that brand-new
+     * `'recording'` state out from under it; a mismatch here is exactly the
+     * signal that this has happened, and returning `state` unchanged is
+     * what makes that clear a safe no-op instead.
+     */
+    fun clearIfMatches(state: SessionState, sessionId: String): SessionState =
+        if (state.sessionId == sessionId) SessionState.IDLE else state
+
+    /**
      * The liveness check that makes `getStatus()` the source of truth across
      * WebView recreation, process death, force-stop, and reboot: if the
      * persisted state claims `phase == 'recording'` but the recording

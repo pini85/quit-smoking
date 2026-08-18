@@ -129,7 +129,14 @@ class SnoreMonitorPlugin : Plugin() {
     @PluginMethod
     fun startRecording(call: PluginCall) {
         val sessionId = call.getString("sessionId")
-        if (sessionId.isNullOrBlank()) {
+        // isSafeId is required here, not just isNullOrBlank: sessionId is
+        // later used verbatim as a path segment under filesDir (by every
+        // other method in this file, via RecordingService.sessionDirFor /
+        // the clips directory), so an unsafe sessionId accepted HERE is a
+        // path-traversal hole reachable from every one of them -- closing
+        // it only downstream (e.g. in cutClips) would leave this, the
+        // actual entry point, unguarded.
+        if (sessionId.isNullOrBlank() || !isSafeId(sessionId)) {
             call.reject("sessionId is required", "INVALID_ARGUMENT")
             return
         }
@@ -296,7 +303,12 @@ class SnoreMonitorPlugin : Plugin() {
     @PluginMethod
     fun extractFeatures(call: PluginCall) {
         val sessionId = call.getString("sessionId")
-        if (sessionId.isNullOrBlank()) {
+        // isSafeId, not just isNullOrBlank: sessionId is used verbatim as a
+        // path segment below (RecordingService.sessionDirFor) -- see
+        // startRecording's doc for why every entry point that accepts a
+        // caller-supplied sessionId must apply this same check, not just
+        // the ones that construct a NEW path from it.
+        if (sessionId.isNullOrBlank() || !isSafeId(sessionId)) {
             call.reject("sessionId is required", "INVALID_ARGUMENT")
             return
         }
@@ -376,7 +388,16 @@ class SnoreMonitorPlugin : Plugin() {
     @PluginMethod
     fun cutClips(call: PluginCall) {
         val sessionId = call.getString("sessionId")
-        if (sessionId.isNullOrBlank()) {
+        // isSafeId is REQUIRED here (not just the equality-match against
+        // sessionStore below): sessionId becomes a directory path segment
+        // for both sessionDir and clipsDir further down, and the equality
+        // check alone is not a sound path-traversal defense on its own --
+        // startRecording persists whatever string it was given, so without
+        // this check here too, an unsafe sessionId that made it past
+        // startRecording (see that method's doc) would still reach
+        // File(...) construction in THIS method. Kept here as defense in
+        // depth even though startRecording now also rejects it at the root.
+        if (sessionId.isNullOrBlank() || !isSafeId(sessionId)) {
             call.reject("sessionId is required", "INVALID_ARGUMENT")
             return
         }
@@ -440,10 +461,15 @@ class SnoreMonitorPlugin : Plugin() {
                 }
                 call.resolve(JSObject().apply { put("clips", results) })
             } catch (e: Exception) {
-                // Never log audio content -- only the exception's own
-                // (non-audio) message and clip/session ids, never paths or
-                // audio bytes.
-                call.reject("Clip cut failed: ${e.message}", "EXTRACTION_FAILED")
+                // The exception's CLASS NAME only, never e.message: this
+                // catch wraps ClipCutter.cut, which touches real segment/clip
+                // files, and e.message on a file-related exception (e.g.
+                // FileNotFoundException) conventionally embeds the full
+                // offending path -- exactly the "never log/return full
+                // paths" rule this file follows elsewhere. Matches
+                // FeatureExtractor's own convention (its onSegmentFailed
+                // logging also uses only e.javaClass.simpleName).
+                call.reject("Clip cut failed: ${e.javaClass.simpleName}", "EXTRACTION_FAILED")
             } finally {
                 wakeLock?.let { if (it.isHeld) it.release() }
                 processing.set(false)
@@ -455,13 +481,24 @@ class SnoreMonitorPlugin : Plugin() {
      * Deletes a STOPPED session's on-disk audio: always the segments +
      * `features.bin` under `filesDir/snore/sessions/<sessionId>/`, and —
      * unless [keepClips] is `true` — also `filesDir/snore/clips/<sessionId>/`.
-     * Transitions [sessionStore] to `'idle'` afterward via [SessionStore.clear]
-     * so a subsequent `getStatus()` no longer reports this session at all.
+     * Transitions [sessionStore] to `'idle'` afterward via
+     * [SessionStore.clearIfMatches] so a subsequent `getStatus()` no longer
+     * reports this session — UNLESS a fresh `startRecording` for a different
+     * session raced ahead of this call between the status read above and
+     * that clear (see [SessionStore.clearIfMatches]'s doc): in that case the
+     * clear is skipped as a no-op, deliberately NOT rolled back or retried,
+     * since the delete itself already succeeded and clobbering the newer
+     * session's state would be strictly worse.
      *
      * Runs synchronously on the calling (Capacitor bridge) thread: this is
      * plain filesystem deletion, not a decode/mux job, so it does not need
-     * [executor]/[processing]/a wake lock the way [extractFeatures]/[cutClips]
-     * do.
+     * [executor]/a wake lock the way [extractFeatures]/[cutClips] do. It
+     * DOES still check [processing], though (rejecting `ALREADY_PROCESSING`
+     * if an extraction or cut is currently running against this session's
+     * segment files) — deleting those files out from under an in-flight
+     * `MediaExtractor`/`MediaCodec` read would surface as a spurious
+     * mid-decode failure there instead of a clean, retryable rejection here.
+     * The caller can simply retry once that call finishes.
      *
      * [sessionId] is validated against [isSafeId] like a clip id (same
      * path-traversal concern: it becomes a path segment under `filesDir`),
@@ -484,6 +521,14 @@ class SnoreMonitorPlugin : Plugin() {
             return
         }
 
+        if (processing.get()) {
+            call.reject(
+                "An extraction or clip cut is still running for this session; retry once it finishes",
+                "ALREADY_PROCESSING",
+            )
+            return
+        }
+
         val keepClips = call.getBoolean("keepClips", false) ?: false
 
         RecordingService.sessionDirFor(context.filesDir, sessionId).deleteRecursively()
@@ -491,7 +536,7 @@ class SnoreMonitorPlugin : Plugin() {
             File(File(context.filesDir, CLIPS_DIR_NAME), sessionId).deleteRecursively()
         }
 
-        sessionStore.clear()
+        sessionStore.clearIfMatches(sessionId)
         call.resolve()
     }
 

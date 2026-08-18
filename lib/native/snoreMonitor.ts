@@ -8,14 +8,15 @@
  *  - PERMISSION_DENIED   startRecording — microphone permission not granted
  *  - NOT_RECORDING       stopRecording / extractFeatures — no active/last
  *                        session to act on
- *  - ALREADY_PROCESSING  extractFeatures / cutClips — a previous extraction
- *                        or cut is still running for this session
+ *  - ALREADY_PROCESSING  extractFeatures / cutClips / deleteSessionAudio —
+ *                        a previous extraction or cut is still running for
+ *                        this session
  *  - LOW_STORAGE         startRecording — insufficient device storage to
  *                        begin a new recording
  *  - SESSION_NOT_FOUND   extractFeatures / cutClips / deleteSessionAudio —
  *                        sessionId does not match any known recording
- *  - EXTRACTION_FAILED   extractFeatures — feature extraction could not
- *                        produce a valid features.bin
+ *  - EXTRACTION_FAILED   extractFeatures / cutClips — feature extraction or
+ *                        clip cut could not produce a valid output file
  *  - INVALID_ARGUMENT    startRecording / extractFeatures / cutClips /
  *                        deleteSessionAudio / deleteClips — a required
  *                        argument is missing or malformed (e.g. a blank

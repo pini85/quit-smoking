@@ -87,15 +87,28 @@ class SessionStore(context: Context) {
     /**
      * Clears the store back to a brand-new `'idle'` state — the terminal
      * transition out of `'stopped'`, invoked by `deleteSessionAudio` once a
-     * session's on-disk audio has actually been deleted. There is no
-     * dedicated `SessionStateCodec` transition for this (unlike
-     * `startRecording`/`appendSegment`/`stop`): going to idle needs no
-     * case-specific logic, writing the shared [SessionState.IDLE] constant
-     * IS the entire transition.
+     * session's on-disk audio has actually been deleted — but ONLY if
+     * [sessionId] still matches what is currently persisted. Read-check-write
+     * atomically under [LOCK], NOT an unconditional clear: `deleteSessionAudio`
+     * reads status, then does file I/O, then calls this — a `startRecording`
+     * for a DIFFERENT session landing in that window must not have its
+     * brand-new `'recording'` state silently wiped by this stale delete
+     * finishing late (TOCTOU). See [SessionStateCodec.clearIfMatches] (the
+     * pure, unit-tested half of this check).
+     *
+     * Returns `true` if the clear actually happened, `false` if the current
+     * state no longer matched [sessionId] (nothing was touched — the caller
+     * should treat this as "someone else already moved the store on").
      */
-    fun clear(): SessionState = synchronized(LOCK) {
-        write(SessionState.IDLE)
-        SessionState.IDLE
+    fun clearIfMatches(sessionId: String): Boolean = synchronized(LOCK) {
+        val current = read()
+        val next = SessionStateCodec.clearIfMatches(current, sessionId)
+        if (next === current) {
+            false
+        } else {
+            write(next)
+            true
+        }
     }
 
     private fun read(): SessionState = SessionStateCodec.parse(prefs.getString(KEY_STATE, null))

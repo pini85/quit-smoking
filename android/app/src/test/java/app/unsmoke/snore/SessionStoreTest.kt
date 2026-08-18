@@ -176,4 +176,38 @@ class SessionStoreTest {
         assertTrue(recovered.interrupted!!)
         assertEquals(SessionState.STOP_REASON_ERROR, recovered.stopReason)
     }
+
+    // --- clearIfMatches (TOCTOU-safe deleteSessionAudio clear) --------------
+
+    @Test
+    fun `clearIfMatches clears to idle when the sessionId matches`() {
+        var stopped = SessionStateCodec.startRecording("session-1", 1_000L)
+        stopped = SessionStateCodec.appendSegment(stopped, Segment("seg_0000.m4a", 2_000L))
+        stopped = SessionStateCodec.stop(stopped, SessionState.STOP_REASON_USER, interrupted = false, endedAt = 3_000L)
+
+        val cleared = SessionStateCodec.clearIfMatches(stopped, "session-1")
+
+        assertEquals(SessionState.IDLE, cleared)
+    }
+
+    @Test
+    fun `clearIfMatches is a no-op when the sessionId no longer matches`() {
+        // Models the TOCTOU race: deleteSessionAudio read 'session-1', but a
+        // fresh startRecording("session-2") landed before the clear call
+        // arrived -- clearing unconditionally would wipe this brand-new
+        // 'recording' state out from under it.
+        val racedIn = SessionStateCodec.startRecording("session-2", 9_000L)
+
+        val result = SessionStateCodec.clearIfMatches(racedIn, "session-1")
+
+        assertEquals(racedIn, result)
+        assertEquals(SessionState.PHASE_RECORDING, result.phase)
+        assertEquals("session-2", result.sessionId)
+    }
+
+    @Test
+    fun `clearIfMatches is a no-op against an already-idle state with no sessionId`() {
+        val result = SessionStateCodec.clearIfMatches(SessionState.IDLE, "session-1")
+        assertEquals(SessionState.IDLE, result)
+    }
 }
