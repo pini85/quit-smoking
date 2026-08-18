@@ -3,6 +3,7 @@ package app.unsmoke.snore
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.os.SystemClock
 import android.util.Log
 import java.io.File
 import java.io.IOException
@@ -96,18 +97,28 @@ object FeatureExtractor {
     private const val DEQUEUE_TIMEOUT_US = 10_000L
 
     /**
-     * Once end-of-stream has been queued to the input side, the decoder is
-     * expected to flush its remaining output quickly (typically well under
-     * a second for a single AAC segment) — if [DEQUEUE_TIMEOUT_US]-spaced
-     * polls go this long without ANY output progress (a real output buffer
-     * or a format-changed event), something is wrong with this codec
-     * instance (observed on some vendor decoders when fed corrupt input
-     * near end-of-file) and the drain loop must not spin forever: it would
-     * otherwise never return, leaving the `PluginCall` unsettled and the
-     * plugin's `processing` guard stuck `true` for the rest of the process
-     * lifetime. Chosen generously relative to real decode latency, in the
-     * same spirit as `RecordingService.ROTATION_WATCHDOG_MS` (8s) for its
-     * own "boundary event that should have already happened" watchdog.
+     * If [DEQUEUE_TIMEOUT_US]-spaced polls go this long without ANY
+     * progress at all — an input buffer successfully queued, a real output
+     * buffer emitted, or a format-changed event — something is wrong with
+     * this codec instance (observed on some vendor decoders when fed
+     * corrupt input, both mid-stream — the input buffer pool never frees
+     * up — and near end-of-file during the final drain) and the loop must
+     * not spin forever: it would otherwise never return, leaving the
+     * `PluginCall` unsettled and the plugin's `processing` guard stuck
+     * `true` for the rest of the process lifetime. Deliberately NOT gated
+     * on end-of-stream having been queued — a decoder can just as easily
+     * wedge before consuming all of its input as during the final drain,
+     * and both must be bounded the same way. Chosen generously relative to
+     * real decode latency (draining a single AAC segment is normally near-
+     * instant; feeding it is continuous). Matches
+     * `RecordingService.ROTATION_WATCHDOG_MS` (8s) in spirit as a
+     * "something that should keep progressing didn't" watchdog, and, like
+     * that one, is measured with [SystemClock.elapsedRealtime] rather than
+     * [System.currentTimeMillis] — the latter is wall-clock time and can
+     * jump backward (e.g. an NTP resync after an overnight recording,
+     * exactly the scenario this extractor runs in) or forward, which would
+     * make the deadline never trip or trip spuriously; `elapsedRealtime`
+     * only ever moves forward at a steady rate.
      */
     private const val OUTPUT_STALL_TIMEOUT_MS = 10_000L
 
@@ -210,14 +221,16 @@ object FeatureExtractor {
                 val bufferInfo = MediaCodec.BufferInfo()
                 var sawInputEos = false
                 var sawOutputEos = false
-                // Tracks the last time ANY output progress was observed (a
-                // real output buffer or a format change); only consulted
-                // once sawInputEos is true -- see OUTPUT_STALL_TIMEOUT_MS's
-                // doc. Reset the instant end-of-stream is queued, so the
-                // deadline measures "time since we started expecting the
-                // final drain," not time since some earlier, unrelated
-                // output event.
-                var lastProgressAtMs = System.currentTimeMillis()
+                // Tracks the last time ANY progress was observed -- an
+                // input buffer successfully queued, a real output buffer,
+                // or a format change -- and is checked every iteration
+                // regardless of sawInputEos, so a decoder that wedges
+                // before it has even consumed all of its input (as well as
+                // one that wedges during the final post-EOS drain) is
+                // bounded the same way. See OUTPUT_STALL_TIMEOUT_MS's doc
+                // for why elapsedRealtime (monotonic) is used here rather
+                // than currentTimeMillis (wall-clock, can jump either way).
+                var lastProgressAtMs = SystemClock.elapsedRealtime()
 
                 while (!sawOutputEos) {
                     if (!sawInputEos) {
@@ -229,18 +242,18 @@ object FeatureExtractor {
                             if (sampleSize < 0) {
                                 codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                                 sawInputEos = true
-                                lastProgressAtMs = System.currentTimeMillis()
                             } else {
                                 codec.queueInputBuffer(inputIndex, 0, sampleSize, extractor.sampleTime, 0)
                                 extractor.advance()
                             }
+                            lastProgressAtMs = SystemClock.elapsedRealtime()
                         }
                     }
 
                     val outputIndex = codec.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)
                     when {
                         outputIndex >= 0 -> {
-                            lastProgressAtMs = System.currentTimeMillis()
+                            lastProgressAtMs = SystemClock.elapsedRealtime()
                             if (bufferInfo.size > 0) {
                                 val outputBuffer = codec.getOutputBuffer(outputIndex)
                                     ?: throw IOException("codec returned no output buffer")
@@ -255,7 +268,7 @@ object FeatureExtractor {
                             }
                         }
                         outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                            lastProgressAtMs = System.currentTimeMillis()
+                            lastProgressAtMs = SystemClock.elapsedRealtime()
                             val newFormat = codec.outputFormat
                             channelCount = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                             sampleRate = newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
@@ -264,9 +277,9 @@ object FeatureExtractor {
                         // INFO_TRY_AGAIN_LATER / the deprecated INFO_OUTPUT_BUFFERS_CHANGED: no progress this iteration.
                     }
 
-                    if (sawInputEos && System.currentTimeMillis() - lastProgressAtMs > OUTPUT_STALL_TIMEOUT_MS) {
+                    if (SystemClock.elapsedRealtime() - lastProgressAtMs > OUTPUT_STALL_TIMEOUT_MS) {
                         throw IOException(
-                            "decoder produced no output for ${OUTPUT_STALL_TIMEOUT_MS}ms after end-of-stream was queued",
+                            "decoder made no progress for ${OUTPUT_STALL_TIMEOUT_MS}ms (sawInputEos=$sawInputEos)",
                         )
                     }
                 }
