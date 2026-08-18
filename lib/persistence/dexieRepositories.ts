@@ -8,6 +8,7 @@ import type {
   ProfileRepository,
   ReasonRepository,
   Repositories,
+  SleepSessionRepository,
   Snapshot,
 } from './repositories';
 
@@ -136,6 +137,37 @@ function createFreedomSessionRepository(db: QuitDb): FreedomSessionRepository {
   };
 }
 
+function createSleepSessionRepository(db: QuitDb): SleepSessionRepository {
+  return {
+    async add(s) {
+      await db.sleepSessions.add(s);
+    },
+    async update(s) {
+      await db.sleepSessions.put(s);
+    },
+    get(id) {
+      return db.sleepSessions.get(id);
+    },
+    async getAll() {
+      const rows = await db.sleepSessions.toArray();
+      return sortChronologically(rows, (s) => s.startedAt);
+    },
+    async getPending() {
+      const rows = await db.sleepSessions.filter((s) => s.state !== 'analyzed').toArray();
+      return sortChronologically(rows, (s) => s.startedAt);
+    },
+    async remove(id) {
+      await db.sleepSessions.delete(id);
+    },
+    async removeAll() {
+      await db.sleepSessions.clear();
+    },
+    async bulkPut(s) {
+      await db.sleepSessions.bulkPut(s);
+    },
+  };
+}
+
 export function createRepositories(db: QuitDb): Repositories {
   const profile = createProfileRepository(db);
   const cravings = createCravingRepository(db);
@@ -144,6 +176,7 @@ export function createRepositories(db: QuitDb): Repositories {
   const preferences = createPreferencesRepository(db);
   const beliefAssessments = createBeliefAssessmentRepository(db);
   const freedomSessions = createFreedomSessionRepository(db);
+  const sleepSessions = createSleepSessionRepository(db);
 
   const allTables = [
     db.profile,
@@ -153,6 +186,7 @@ export function createRepositories(db: QuitDb): Repositories {
     db.preferences,
     db.beliefAssessments,
     db.freedomSessions,
+    db.sleepSessions,
   ];
 
   return {
@@ -163,6 +197,7 @@ export function createRepositories(db: QuitDb): Repositories {
     preferences,
     beliefAssessments,
     freedomSessions,
+    sleepSessions,
 
     readSnapshot(): Promise<Snapshot> {
       return db.transaction('r', allTables, async () => {
@@ -174,6 +209,7 @@ export function createRepositories(db: QuitDb): Repositories {
           preferencesRow,
           assessmentRows,
           freedomRows,
+          sleepRows,
         ] = await Promise.all([
           db.profile.get(SINGLETON_ID),
           db.cravings.toArray(),
@@ -182,6 +218,7 @@ export function createRepositories(db: QuitDb): Repositories {
           db.preferences.get(SINGLETON_ID),
           db.beliefAssessments.toArray(),
           db.freedomSessions.toArray(),
+          db.sleepSessions.toArray(),
         ]);
         return {
           profile: profileRow ?? null,
@@ -191,6 +228,7 @@ export function createRepositories(db: QuitDb): Repositories {
           preferences: preferencesRow ?? null,
           beliefAssessments: sortChronologically(assessmentRows, (a) => a.assessedAt),
           freedomSessions: sortChronologically(freedomRows, (s) => s.startedAt),
+          sleepSessions: sortChronologically(sleepRows, (s) => s.startedAt),
         };
       });
     },
@@ -210,6 +248,7 @@ export function createRepositories(db: QuitDb): Repositories {
           db.preferences.clear(),
           db.beliefAssessments.clear(),
           db.freedomSessions.clear(),
+          db.sleepSessions.clear(),
         ]);
         await Promise.all([
           s.profile ? db.profile.put(s.profile) : Promise.resolve(),
@@ -219,6 +258,7 @@ export function createRepositories(db: QuitDb): Repositories {
           s.preferences ? db.preferences.put(s.preferences) : Promise.resolve(),
           db.beliefAssessments.bulkPut(s.beliefAssessments),
           db.freedomSessions.bulkPut(s.freedomSessions),
+          db.sleepSessions.bulkPut(s.sleepSessions),
         ]);
       });
     },
@@ -233,6 +273,7 @@ export function createRepositories(db: QuitDb): Repositories {
           db.preferences.clear(),
           db.beliefAssessments.clear(),
           db.freedomSessions.clear(),
+          db.sleepSessions.clear(),
         ]);
       });
     },

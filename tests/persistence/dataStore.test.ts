@@ -9,6 +9,7 @@ import type {
   FreedomSession,
   PersonalReason,
   QuitProfile,
+  SleepSession,
 } from '@/domain/types';
 
 // Every test gets its own isolated fake-indexeddb database so state never
@@ -83,6 +84,15 @@ function makeFreedomSession(overrides: Partial<FreedomSession> = {}): FreedomSes
   };
 }
 
+function makeSleepSession(overrides: Partial<SleepSession> = {}): SleepSession {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-01T22:00:00Z',
+    state: 'recording',
+    ...overrides,
+  };
+}
+
 function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
   return {
     profile: null,
@@ -92,6 +102,7 @@ function makeSnapshot(overrides: Partial<Snapshot> = {}): Snapshot {
     preferences: null,
     beliefAssessments: [],
     freedomSessions: [],
+    sleepSessions: [],
     ...overrides,
   };
 }
@@ -123,6 +134,16 @@ function makeStubRepositories(readSnapshot: Repositories['readSnapshot']): Repos
     preferences: { get: async () => undefined, save: async () => {} },
     beliefAssessments: { add: async () => {}, getAll: async () => [], bulkPut: async () => {} },
     freedomSessions: { add: async () => {}, getAll: async () => [], bulkPut: async () => {} },
+    sleepSessions: {
+      add: async () => {},
+      update: async () => {},
+      get: async () => undefined,
+      getAll: async () => [],
+      getPending: async () => [],
+      remove: async () => {},
+      removeAll: async () => {},
+      bulkPut: async () => {},
+    },
     readSnapshot,
     replaceAll: async () => {},
     clearAll: async () => {},
@@ -141,6 +162,7 @@ describe('DataStore', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -164,6 +186,7 @@ describe('DataStore', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -309,6 +332,39 @@ describe('DataStore', () => {
     const secondStore = new DataStore(createRepositories(db));
     await secondStore.load();
     expect(secondStore.getSnapshot().freedomSessions).toEqual([session]);
+  });
+
+  it('addSleepSession, updateSleepSession, removeSleepSession and clearSleepSessions persist and notify', async () => {
+    const db = freshDb();
+    const store = new DataStore(createRepositories(db));
+    await store.load();
+
+    const session = makeSleepSession({ state: 'recording' });
+    await store.addSleepSession(session);
+    expect(store.getSnapshot().sleepSessions).toEqual([session]);
+
+    const analyzed: SleepSession = {
+      ...session,
+      state: 'analyzed',
+      endedAt: '2026-01-02T06:00:00Z',
+      analysisVersion: 'v1',
+    };
+    await store.updateSleepSession(analyzed);
+    expect(store.getSnapshot().sleepSessions).toEqual([analyzed]);
+
+    // Persisted, not merely cached: a fresh DataStore on the same db sees it.
+    const secondStore = new DataStore(createRepositories(db));
+    await secondStore.load();
+    expect(secondStore.getSnapshot().sleepSessions).toEqual([analyzed]);
+
+    await store.removeSleepSession(session.id);
+    expect(store.getSnapshot().sleepSessions).toEqual([]);
+
+    const other = makeSleepSession();
+    await store.addSleepSession(other);
+    expect(store.getSnapshot().sleepSessions).toEqual([other]);
+    await store.clearSleepSessions();
+    expect(store.getSnapshot().sleepSessions).toEqual([]);
   });
 
   it('addBeliefAssessment and addFreedomSession each notify exactly once', async () => {

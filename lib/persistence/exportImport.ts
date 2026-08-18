@@ -7,7 +7,7 @@
  * corrupt file can never reach a write.
  */
 
-import { buildExportFile, exportFileName, type ExportFileV2, type ExportSnapshot } from '@/domain/export/format';
+import { buildExportFile, exportFileName, type ExportFileV3, type ExportSnapshot } from '@/domain/export/format';
 import { migrateToLatest, ImportError } from '@/domain/export/migrate';
 import { mergeSnapshots, type MergeSummary } from '@/domain/export/merge';
 import { validateExportFile } from '@/lib/validation/importSchemas';
@@ -26,7 +26,7 @@ export async function exportData(
   };
 }
 
-function fileToSnapshot(file: ExportFileV2): ExportSnapshot {
+function fileToSnapshot(file: ExportFileV3): ExportSnapshot {
   return {
     profile: file.profile,
     cravings: file.cravings,
@@ -35,6 +35,7 @@ function fileToSnapshot(file: ExportFileV2): ExportSnapshot {
     preferences: file.preferences,
     beliefAssessments: file.beliefAssessments,
     freedomSessions: file.freedomSessions,
+    sleepSessions: file.sleepSessions,
   };
 }
 
@@ -46,6 +47,7 @@ const EMPTY_SNAPSHOT: ExportSnapshot = {
   preferences: null,
   beliefAssessments: [],
   freedomSessions: [],
+  sleepSessions: [],
 };
 
 /**
@@ -55,7 +57,7 @@ const EMPTY_SNAPSHOT: ExportSnapshot = {
 export async function previewImport(
   repos: Repositories,
   rawText: string
-): Promise<{ file: ExportFileV2; summary: MergeSummary }> {
+): Promise<{ file: ExportFileV3; summary: MergeSummary }> {
   let raw: unknown;
   try {
     raw = JSON.parse(rawText);
@@ -80,7 +82,7 @@ export async function previewImport(
  */
 export async function applyImport(
   repos: Repositories,
-  file: ExportFileV2,
+  file: ExportFileV3,
   mode: 'merge' | 'replace'
 ): Promise<MergeSummary> {
   const importedSnapshot = fileToSnapshot(file);

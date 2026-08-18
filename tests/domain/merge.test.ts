@@ -8,6 +8,7 @@ import type {
   QuitProfile,
   BeliefAssessment,
   FreedomSession,
+  SleepSession,
 } from '@/domain/types';
 
 function craving(overrides: Partial<CravingSession> = {}): CravingSession {
@@ -68,6 +69,15 @@ function freedomSession(overrides: Partial<FreedomSession> = {}): FreedomSession
   };
 }
 
+function sleepSession(overrides: Partial<SleepSession> = {}): SleepSession {
+  return {
+    id: 'ss1',
+    startedAt: '2026-01-01T22:00:00Z',
+    state: 'recorded',
+    ...overrides,
+  };
+}
+
 function emptySnapshot(overrides: Partial<ExportSnapshot> = {}): ExportSnapshot {
   return {
     profile: null,
@@ -77,6 +87,7 @@ function emptySnapshot(overrides: Partial<ExportSnapshot> = {}): ExportSnapshot 
     preferences: null,
     beliefAssessments: [],
     freedomSessions: [],
+    sleepSessions: [],
     ...overrides,
   };
 }
@@ -219,6 +230,7 @@ describe('mergeSnapshots — belief assessments and freedom sessions', () => {
     const { summary } = mergeSnapshots(emptySnapshot(), emptySnapshot());
     expect(summary.newBeliefAssessments).toBe(0);
     expect(summary.newFreedomSessions).toBe(0);
+    expect(summary.newSleepSessions).toBe(0);
   });
 
   it('sorts merged belief assessments by assessedAt ascending', () => {
@@ -271,6 +283,63 @@ describe('mergeSnapshots — belief assessments and freedom sessions', () => {
     const { merged } = mergeSnapshots(current, imported);
     merged.beliefAssessments.push(assessment({ id: 'mutated' }));
     merged.freedomSessions.push(freedomSession({ id: 'mutated' }));
+
+    expect(current).toEqual(currentClone);
+    expect(imported).toEqual(importedClone);
+  });
+});
+
+describe('mergeSnapshots — sleep sessions', () => {
+  it('unions sleep sessions from both sides when ids differ', () => {
+    const current = emptySnapshot({ sleepSessions: [sleepSession({ id: 'a' })] });
+    const imported = emptySnapshot({ sleepSessions: [sleepSession({ id: 'b' })] });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.sleepSessions.map((s) => s.id).sort()).toEqual(['a', 'b']);
+    expect(summary.newSleepSessions).toBe(1);
+  });
+
+  it('on id collision, keeps the CURRENT sleep session', () => {
+    const current = emptySnapshot({
+      sleepSessions: [sleepSession({ id: 'shared', state: 'analyzed' })],
+    });
+    const imported = emptySnapshot({
+      sleepSessions: [
+        sleepSession({ id: 'shared', state: 'recorded' }),
+        sleepSession({ id: 'new' }),
+      ],
+    });
+
+    const { merged, summary } = mergeSnapshots(current, imported);
+
+    expect(merged.sleepSessions).toHaveLength(2);
+    expect(merged.sleepSessions.find((s) => s.id === 'shared')?.state).toBe('analyzed');
+    expect(summary.newSleepSessions).toBe(1);
+  });
+
+  it('sorts merged sleep sessions by startedAt ascending, comparing instants across offsets', () => {
+    const current = emptySnapshot({
+      // 2026-01-01T09:00:00+02:00 is 07:00Z — EARLIER than 08:00Z despite the
+      // larger wall-clock hour.
+      sleepSessions: [sleepSession({ id: 'earlier-instant', startedAt: '2026-01-01T09:00:00+02:00' })],
+    });
+    const imported = emptySnapshot({
+      sleepSessions: [sleepSession({ id: 'later-instant', startedAt: '2026-01-01T08:00:00Z' })],
+    });
+
+    const { merged } = mergeSnapshots(current, imported);
+    expect(merged.sleepSessions.map((s) => s.id)).toEqual(['earlier-instant', 'later-instant']);
+  });
+
+  it('never mutates either side’s sleepSessions collection', () => {
+    const current = emptySnapshot({ sleepSessions: [sleepSession({ id: 'a' })] });
+    const imported = emptySnapshot({ sleepSessions: [sleepSession({ id: 'b' })] });
+    const currentClone = JSON.parse(JSON.stringify(current));
+    const importedClone = JSON.parse(JSON.stringify(imported));
+
+    const { merged } = mergeSnapshots(current, imported);
+    merged.sleepSessions.push(sleepSession({ id: 'mutated' }));
 
     expect(current).toEqual(currentClone);
     expect(imported).toEqual(importedClone);

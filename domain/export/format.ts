@@ -15,6 +15,7 @@ import type {
   Preferences,
   BeliefAssessment,
   FreedomSession,
+  SleepSession,
 } from '@/domain/types';
 
 /**
@@ -31,8 +32,8 @@ import type {
  * pretending to be a guarantee, since nothing checks them against a real
  * historical file. The actual guardrail for what an old file may contain is
  * the migrate-then-validate pipeline (`MIGRATIONS[1]` works on
- * `Record<string, unknown>`, and only the v2 schema ever validates), plus the
- * verbatim captured v1 export pinned in `tests/domain/migrate.test.ts`.
+ * `Record<string, unknown>`, and only the current schema ever validates),
+ * plus the verbatim captured v1 export pinned in `tests/domain/migrate.test.ts`.
  */
 export interface ExportSnapshotV1 {
   profile: QuitProfile | null;
@@ -43,15 +44,27 @@ export interface ExportSnapshotV1 {
 }
 
 /**
- * The CURRENT snapshot shape (v2). Structurally identical to
- * `lib/persistence/repositories.Snapshot` — see the module doc above.
+ * Freezes the SET of collections a schemaVersion-2 file carries, the same way
+ * `ExportSnapshotV1` freezes v1's. `ExportSnapshot` used to BE this shape
+ * until sleep/snore monitoring added a sixth collection; giving it its own
+ * name here keeps `MIGRATIONS[2]` and the captured v2 fixture in
+ * `tests/domain/migrate.test.ts` meaningful against a shape that will never
+ * change again.
  */
-export interface ExportSnapshot extends ExportSnapshotV1 {
+export interface ExportSnapshotV2 extends ExportSnapshotV1 {
   beliefAssessments: BeliefAssessment[];
   freedomSessions: FreedomSession[];
 }
 
-export const CURRENT_EXPORT_VERSION = 2 as const;
+/**
+ * The CURRENT snapshot shape (v3). Structurally identical to
+ * `lib/persistence/repositories.Snapshot` — see the module doc above.
+ */
+export interface ExportSnapshot extends ExportSnapshotV2 {
+  sleepSessions: SleepSession[];
+}
+
+export const CURRENT_EXPORT_VERSION = 3 as const;
 
 export interface ExportFileV1 extends ExportSnapshotV1 {
   schemaVersion: 1;
@@ -59,17 +72,23 @@ export interface ExportFileV1 extends ExportSnapshotV1 {
   exportedAt: string;
 }
 
-export interface ExportFileV2 extends ExportSnapshot {
+export interface ExportFileV2 extends ExportSnapshotV2 {
   schemaVersion: 2;
+  app: 'quit-smoking';
+  exportedAt: string;
+}
+
+export interface ExportFileV3 extends ExportSnapshot {
+  schemaVersion: 3;
   app: 'quit-smoking';
   exportedAt: string;
 }
 
 // Every version this app can be handed. Only the newest is ever WRITTEN;
 // older members exist so migrations have something to name.
-export type AnyExportFile = ExportFileV1 | ExportFileV2;
+export type AnyExportFile = ExportFileV1 | ExportFileV2 | ExportFileV3;
 
-export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): ExportFileV2 {
+export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): ExportFileV3 {
   return {
     schemaVersion: CURRENT_EXPORT_VERSION,
     app: 'quit-smoking',
@@ -81,6 +100,7 @@ export function buildExportFile(snapshot: ExportSnapshot, exportedAt: string): E
     preferences: snapshot.preferences,
     beliefAssessments: snapshot.beliefAssessments,
     freedomSessions: snapshot.freedomSessions,
+    sleepSessions: snapshot.sleepSessions,
   };
 }
 

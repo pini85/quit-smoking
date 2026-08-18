@@ -12,6 +12,7 @@ import type {
   PersonalReason,
   Preferences,
   QuitProfile,
+  SleepSession,
 } from '@/domain/types';
 
 const openDbs: QuitDb[] = [];
@@ -98,6 +99,15 @@ function makeFreedomSession(overrides: Partial<FreedomSession> = {}): FreedomSes
   };
 }
 
+function makeSleepSession(overrides: Partial<SleepSession> = {}): SleepSession {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-03T22:00:00+02:00',
+    state: 'recorded',
+    ...overrides,
+  };
+}
+
 /** A complete, valid v2 export file as raw JSON text. */
 function v2FileJson(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -111,6 +121,24 @@ function v2FileJson(overrides: Record<string, unknown> = {}): string {
     preferences: null,
     beliefAssessments: [],
     freedomSessions: [],
+    ...overrides,
+  });
+}
+
+/** A complete, valid v3 export file as raw JSON text. */
+function v3FileJson(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    schemaVersion: 3,
+    app: 'quit-smoking',
+    exportedAt: '2026-01-05T12:00:00Z',
+    profile: null,
+    cravings: [],
+    achievementUnlocks: [],
+    reasons: [],
+    preferences: null,
+    beliefAssessments: [],
+    freedomSessions: [],
+    sleepSessions: [],
     ...overrides,
   });
 }
@@ -212,6 +240,30 @@ async function seedFullyPopulated(repos: Repositories) {
     trigger: 'coffee',
     lessonId: 'lesson-3',
   };
+  const sleep: SleepSession = {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-03T22:00:00+02:00',
+    endedAt: '2026-01-04T05:30:00+02:00',
+    state: 'analyzed',
+    interrupted: false,
+    preQuit: false,
+    analysisVersion: 'v1',
+    metrics: {
+      recordingDurationMs: 27000000,
+      snoreDurationMs: 1200000,
+      snorePercent: 4.4,
+      eventCount: 12,
+      eventsPerHour: 1.6,
+      avgIntensity: 0.4,
+      peakIntensity: 0.8,
+      longestEpisodeMs: 60000,
+      avgEventDurationMs: 20000,
+      snoreBurden: 15,
+    },
+    events: [
+      { startMs: 1000, endMs: 5000, avgDbfs: -20, peakDbfs: -10, confidence: 0.9, clipPath: 'clip-1.wav' },
+    ],
+  };
   await repos.profile.save(profile);
   await repos.cravings.add(craving);
   await repos.achievements.addUnlocks([unlock]);
@@ -219,7 +271,8 @@ async function seedFullyPopulated(repos: Repositories) {
   await repos.preferences.save(prefs);
   await repos.beliefAssessments.add(assessment);
   await repos.freedomSessions.add(freedom);
-  return { profile, craving, unlock, reason, prefs, assessment, freedom };
+  await repos.sleepSessions.add(sleep);
+  return { profile, craving, unlock, reason, prefs, assessment, freedom, sleep };
 }
 
 describe('exportData', () => {
@@ -232,7 +285,7 @@ describe('exportData', () => {
     expect(fileName).toBe('quit-smoking-export-2026-01-05.json');
     expect(json).toContain('\n  '); // pretty-printed with 2-space indent
     const parsed = JSON.parse(json);
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
     expect(parsed.app).toBe('quit-smoking');
     expect(parsed.exportedAt).toBe('2026-01-05T12:00:00.000Z');
   });
@@ -261,6 +314,7 @@ describe('export -> erase -> import(replace) roundtrip', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
 
     const { file } = await previewImport(repos, json);
@@ -275,6 +329,7 @@ describe('export -> erase -> import(replace) roundtrip', () => {
       preferences: seeded.prefs,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -356,6 +411,60 @@ describe('export -> clearAll -> import(replace): belief + freedom data survives'
   });
 });
 
+describe('export -> clearAll -> import(replace): sleep sessions survive', () => {
+  it('round-trips sleepSessions through a full backup/restore cycle', async () => {
+    const repos = freshRepos();
+    const sessions = [
+      makeSleepSession({ state: 'recorded' }),
+      makeSleepSession({
+        state: 'analyzed',
+        analysisVersion: 'v1',
+        startedAt: '2026-01-04T22:00:00+02:00',
+        endedAt: '2026-01-05T05:00:00+02:00',
+        metrics: {
+          recordingDurationMs: 25200000,
+          snoreDurationMs: 600000,
+          snorePercent: 2.4,
+          eventCount: 5,
+          eventsPerHour: 0.7,
+          avgIntensity: 0.2,
+          peakIntensity: 0.5,
+          longestEpisodeMs: 30000,
+          avgEventDurationMs: 12000,
+          snoreBurden: 6,
+        },
+        events: [{ startMs: 500, endMs: 3000, avgDbfs: -22, peakDbfs: -12, confidence: 0.7 }],
+      }),
+    ];
+    for (const s of sessions) await repos.sleepSessions.add(s);
+
+    const { json } = await exportData(repos, new Date('2026-01-05T12:00:00Z'));
+    const parsed = JSON.parse(json);
+    expect(parsed.sleepSessions).toHaveLength(2);
+
+    await repos.clearAll();
+    expect(await repos.sleepSessions.getAll()).toEqual([]);
+
+    const { file } = await previewImport(repos, json);
+    await applyImport(repos, file, 'replace');
+
+    const snapshot = await repos.readSnapshot();
+    expect(snapshot.sleepSessions).toEqual(sessions);
+  });
+
+  it('replace with a MIGRATED v2 file yields an empty sleepSessions array (v2 predates it)', async () => {
+    const repos = freshRepos();
+    await repos.sleepSessions.add(makeSleepSession());
+
+    const { file } = await previewImport(repos, v2FileJson({ profile: makeProfile() }));
+    await applyImport(repos, file, 'replace');
+
+    const snapshot = await repos.readSnapshot();
+    expect(snapshot.sleepSessions).toEqual([]);
+    expect(snapshot.profile).toEqual(makeProfile());
+  });
+});
+
 describe('applyImport merge mode — belief + freedom collections', () => {
   it('unions imported belief assessments and freedom sessions into a populated DB, current winning on id collision', async () => {
     const repos = freshRepos();
@@ -404,6 +513,34 @@ describe('applyImport merge mode — belief + freedom collections', () => {
     );
     expect(sessionsAfter.find((s) => s.id === 'shared-fs')?.lessonId).toBe('device-lesson');
     expect(sessionsAfter.find((s) => s.id === 'imported-only-fs')?.lessonId).toBe('lesson-2');
+  });
+
+  it('unions imported sleep sessions into a populated DB, current winning on id collision', async () => {
+    const repos = freshRepos();
+    const deviceSession = makeSleepSession({ id: 'shared-ss', state: 'analyzed', analysisVersion: 'v1' });
+    const deviceOnlySession = makeSleepSession({ id: 'device-only-ss' });
+    await repos.sleepSessions.add(deviceSession);
+    await repos.sleepSessions.add(deviceOnlySession);
+
+    const fileJson = v3FileJson({
+      sleepSessions: [
+        { ...deviceSession, state: 'recorded', analysisVersion: undefined },
+        makeSleepSession({ id: 'imported-only-ss' }),
+      ],
+    });
+
+    const { file, summary } = await previewImport(repos, fileJson);
+    expect(summary.newSleepSessions).toBe(1);
+
+    const applied = await applyImport(repos, file, 'merge');
+    expect(applied.newSleepSessions).toBe(1);
+
+    const sleepAfter = await repos.sleepSessions.getAll();
+    expect(sleepAfter.map((s) => s.id).sort()).toEqual(
+      ['device-only-ss', 'imported-only-ss', 'shared-ss'].sort()
+    );
+    // Device row survived — the imported one did NOT overwrite it.
+    expect(sleepAfter.find((s) => s.id === 'shared-ss')?.state).toBe('analyzed');
   });
 
   it('merging an old v1 file into a populated v2 DB never loses local belief data', async () => {
@@ -512,6 +649,7 @@ describe('previewImport rejects corruption without touching the DB', () => {
       preferences: seeded.prefs,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -540,6 +678,7 @@ describe('previewImport rejects corruption without touching the DB', () => {
       preferences: seeded.prefs,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -567,6 +706,7 @@ describe('previewImport rejects corruption without touching the DB', () => {
       preferences: seeded.prefs,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 });
@@ -584,7 +724,7 @@ describe('applyImport replace atomicity', () => {
     } as unknown as PersonalReason;
 
     const file = {
-      schemaVersion: 2 as const,
+      schemaVersion: 3 as const,
       app: 'quit-smoking' as const,
       exportedAt: '2026-01-05T12:00:00Z',
       profile: makeProfile({ cigarettesPerDay: 1 }),
@@ -594,6 +734,7 @@ describe('applyImport replace atomicity', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     };
 
     await expect(applyImport(repos, file, 'replace')).rejects.toBeTruthy();
@@ -607,6 +748,7 @@ describe('applyImport replace atomicity', () => {
       preferences: seeded.prefs,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 });

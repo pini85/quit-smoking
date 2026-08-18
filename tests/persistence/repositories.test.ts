@@ -9,6 +9,7 @@ import type {
   PersonalReason,
   Preferences,
   QuitProfile,
+  SleepSession,
 } from '@/domain/types';
 
 // Every test gets its own isolated fake-indexeddb database so state never
@@ -97,6 +98,15 @@ function makeUnlock(overrides: Partial<AchievementUnlock> = {}): AchievementUnlo
   return {
     id: 'first-day',
     unlockedAt: '2026-01-02T08:00:00Z',
+    ...overrides,
+  };
+}
+
+function makeSleepSession(overrides: Partial<SleepSession> = {}): SleepSession {
+  return {
+    id: crypto.randomUUID(),
+    startedAt: '2026-01-01T22:00:00Z',
+    state: 'recording',
     ...overrides,
   };
 }
@@ -455,6 +465,153 @@ describe('FreedomSessionRepository', () => {
   });
 });
 
+describe('SleepSessionRepository', () => {
+  it('getAll returns an empty array when no session has been recorded', async () => {
+    const repos = createRepositories(freshDb());
+    expect(await repos.sleepSessions.getAll()).toEqual([]);
+  });
+
+  it('add stores a session by id', async () => {
+    const repos = createRepositories(freshDb());
+    const session = makeSleepSession();
+    await repos.sleepSessions.add(session);
+    expect(await repos.sleepSessions.get(session.id)).toEqual(session);
+  });
+
+  it('returns undefined for a missing id', async () => {
+    const repos = createRepositories(freshDb());
+    expect(await repos.sleepSessions.get('nope')).toBeUndefined();
+  });
+
+  it('update replaces the full record as the session moves through its lifecycle', async () => {
+    const repos = createRepositories(freshDb());
+    const session = makeSleepSession({ state: 'recording' });
+    await repos.sleepSessions.add(session);
+
+    const recorded: SleepSession = {
+      ...session,
+      state: 'recorded',
+      endedAt: '2026-01-02T06:00:00Z',
+    };
+    await repos.sleepSessions.update(recorded);
+    expect(await repos.sleepSessions.get(session.id)).toEqual(recorded);
+
+    const analyzed: SleepSession = {
+      ...recorded,
+      state: 'analyzed',
+      analysisVersion: 'v1',
+      metrics: {
+        recordingDurationMs: 28800000,
+        snoreDurationMs: 900000,
+        snorePercent: 3.1,
+        eventCount: 8,
+        eventsPerHour: 1,
+        avgIntensity: 0.3,
+        peakIntensity: 0.6,
+        longestEpisodeMs: 45000,
+        avgEventDurationMs: 15000,
+        snoreBurden: 10,
+      },
+      events: [{ startMs: 0, endMs: 4000, avgDbfs: -18, peakDbfs: -9, confidence: 0.8 }],
+    };
+    await repos.sleepSessions.update(analyzed);
+    expect(await repos.sleepSessions.get(session.id)).toEqual(analyzed);
+  });
+
+  it('getAll returns every session sorted by startedAt ascending, regardless of insert order', async () => {
+    const repos = createRepositories(freshDb());
+    const late = makeSleepSession({ startedAt: '2026-01-03T22:00:00Z' });
+    const early = makeSleepSession({ startedAt: '2026-01-01T22:00:00Z' });
+    const mid = makeSleepSession({ startedAt: '2026-01-02T22:00:00Z' });
+
+    await repos.sleepSessions.add(late);
+    await repos.sleepSessions.add(early);
+    await repos.sleepSessions.add(mid);
+
+    const all = await repos.sleepSessions.getAll();
+    expect(all.map((s) => s.id)).toEqual([early.id, mid.id, late.id]);
+  });
+
+  it('getAll sorts by actual instant, not raw string comparison, across mixed UTC offsets', async () => {
+    const repos = createRepositories(freshDb());
+    const laterInstantEarlyLookingString = makeSleepSession({
+      startedAt: '2026-01-01T02:00:00-08:00', // 2026-01-01T10:00:00Z
+    });
+    const earlierInstantLateLookingString = makeSleepSession({
+      startedAt: '2026-01-01T10:00:00+09:00', // 2026-01-01T01:00:00Z
+    });
+
+    await repos.sleepSessions.bulkPut([
+      laterInstantEarlyLookingString,
+      earlierInstantLateLookingString,
+    ]);
+
+    const all = await repos.sleepSessions.getAll();
+    expect(all.map((s) => s.id)).toEqual([
+      earlierInstantLateLookingString.id,
+      laterInstantEarlyLookingString.id,
+    ]);
+  });
+
+  it('getPending returns only sessions with state !== analyzed', async () => {
+    const repos = createRepositories(freshDb());
+    const recording = makeSleepSession({ state: 'recording' });
+    const recorded = makeSleepSession({ state: 'recorded' });
+    const failed = makeSleepSession({ state: 'failed' });
+    const analyzed = makeSleepSession({ state: 'analyzed', analysisVersion: 'v1' });
+
+    await repos.sleepSessions.bulkPut([recording, recorded, failed, analyzed]);
+
+    const pending = await repos.sleepSessions.getPending();
+    expect(pending.map((s) => s.id).sort()).toEqual(
+      [recording.id, recorded.id, failed.id].sort()
+    );
+  });
+
+  it('getPending sorts the result chronologically', async () => {
+    const repos = createRepositories(freshDb());
+    const late = makeSleepSession({ startedAt: '2026-01-03T22:00:00Z', state: 'recorded' });
+    const early = makeSleepSession({ startedAt: '2026-01-01T22:00:00Z', state: 'recording' });
+
+    await repos.sleepSessions.bulkPut([late, early]);
+
+    const pending = await repos.sleepSessions.getPending();
+    expect(pending.map((s) => s.id)).toEqual([early.id, late.id]);
+  });
+
+  it('remove deletes a single session by id', async () => {
+    const repos = createRepositories(freshDb());
+    const keep = makeSleepSession();
+    const gone = makeSleepSession();
+    await repos.sleepSessions.bulkPut([keep, gone]);
+
+    await repos.sleepSessions.remove(gone.id);
+
+    const all = await repos.sleepSessions.getAll();
+    expect(all.map((s) => s.id)).toEqual([keep.id]);
+  });
+
+  it('removeAll wipes every sleep session — the privacy "delete all nights" case', async () => {
+    const repos = createRepositories(freshDb());
+    await repos.sleepSessions.bulkPut([makeSleepSession(), makeSleepSession()]);
+
+    await repos.sleepSessions.removeAll();
+
+    expect(await repos.sleepSessions.getAll()).toEqual([]);
+  });
+
+  it('bulkPut upserts by id (re-putting the same id overwrites, does not duplicate)', async () => {
+    const repos = createRepositories(freshDb());
+    const session = makeSleepSession({ state: 'recording' });
+    await repos.sleepSessions.bulkPut([session]);
+    await repos.sleepSessions.bulkPut([{ ...session, state: 'recorded' }]);
+
+    const all = await repos.sleepSessions.getAll();
+    expect(all).toHaveLength(1);
+    expect(all[0].state).toBe('recorded');
+  });
+});
+
 describe('readSnapshot', () => {
   it('returns nulls/empty arrays for an empty database', async () => {
     const repos = createRepositories(freshDb());
@@ -467,6 +624,7 @@ describe('readSnapshot', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -479,6 +637,7 @@ describe('readSnapshot', () => {
     const prefs = makePreferences();
     const assessment = makeAssessment();
     const freedomSession = makeFreedomSession();
+    const sleepSession = makeSleepSession();
 
     await repos.profile.save(profile);
     await repos.cravings.add(craving);
@@ -487,6 +646,7 @@ describe('readSnapshot', () => {
     await repos.preferences.save(prefs);
     await repos.beliefAssessments.add(assessment);
     await repos.freedomSessions.add(freedomSession);
+    await repos.sleepSessions.add(sleepSession);
 
     const snapshot = await repos.readSnapshot();
     expect(snapshot).toEqual({
@@ -497,10 +657,11 @@ describe('readSnapshot', () => {
       preferences: prefs,
       beliefAssessments: [assessment],
       freedomSessions: [freedomSession],
+      sleepSessions: [sleepSession],
     });
   });
 
-  it('sorts cravings, reasons, assessments and freedom sessions by actual instant across mixed UTC offsets', async () => {
+  it('sorts cravings, reasons, assessments, freedom sessions and sleep sessions by actual instant across mixed UTC offsets', async () => {
     const repos = createRepositories(freshDb());
     // Same counterexample as the repository-level ordering tests: "02" <
     // "10" as strings, but -08:00 vs +09:00 flips which instant is earlier.
@@ -512,11 +673,14 @@ describe('readSnapshot', () => {
     const earlierAssessment = makeAssessment({ assessedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
     const laterFreedom = makeFreedomSession({ startedAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
     const earlierFreedom = makeFreedomSession({ startedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
+    const laterSleep = makeSleepSession({ startedAt: '2026-01-01T02:00:00-08:00' }); // 10:00Z
+    const earlierSleep = makeSleepSession({ startedAt: '2026-01-01T10:00:00+09:00' }); // 01:00Z
 
     await repos.cravings.bulkPut([laterCraving, earlierCraving]);
     await repos.reasons.bulkPut([laterReason, earlierReason]);
     await repos.beliefAssessments.bulkPut([laterAssessment, earlierAssessment]);
     await repos.freedomSessions.bulkPut([laterFreedom, earlierFreedom]);
+    await repos.sleepSessions.bulkPut([laterSleep, earlierSleep]);
 
     const snapshot = await repos.readSnapshot();
     expect(snapshot.cravings.map((c) => c.id)).toEqual([earlierCraving.id, laterCraving.id]);
@@ -529,6 +693,7 @@ describe('readSnapshot', () => {
       earlierFreedom.id,
       laterFreedom.id,
     ]);
+    expect(snapshot.sleepSessions.map((s) => s.id)).toEqual([earlierSleep.id, laterSleep.id]);
   });
 });
 
@@ -544,6 +709,7 @@ describe('replaceAll', () => {
     await repos.preferences.save(makePreferences());
     await repos.beliefAssessments.add(makeAssessment({ beliefId: 'deprivation' }));
     await repos.freedomSessions.add(makeFreedomSession());
+    await repos.sleepSessions.add(makeSleepSession());
 
     const newProfile = makeProfile({ cigarettesPerDay: 5 });
     const newCraving = makeCraving();
@@ -552,6 +718,7 @@ describe('replaceAll', () => {
     const newPrefs = makePreferences({ theme: 'light' });
     const newAssessment = makeAssessment({ beliefId: 'just-one', strength: 1 });
     const newFreedomSession = makeFreedomSession({ kind: 'exercise', lessonId: 'the-trap' });
+    const newSleepSession = makeSleepSession({ state: 'analyzed', analysisVersion: 'v1' });
 
     await repos.replaceAll({
       profile: newProfile,
@@ -561,6 +728,7 @@ describe('replaceAll', () => {
       preferences: newPrefs,
       beliefAssessments: [newAssessment],
       freedomSessions: [newFreedomSession],
+      sleepSessions: [newSleepSession],
     });
 
     const snapshot = await repos.readSnapshot();
@@ -572,6 +740,7 @@ describe('replaceAll', () => {
       preferences: newPrefs,
       beliefAssessments: [newAssessment],
       freedomSessions: [newFreedomSession],
+      sleepSessions: [newSleepSession],
     });
   });
 
@@ -584,6 +753,7 @@ describe('replaceAll', () => {
     await repos.preferences.save(makePreferences());
     await repos.beliefAssessments.add(makeAssessment());
     await repos.freedomSessions.add(makeFreedomSession());
+    await repos.sleepSessions.add(makeSleepSession());
 
     await repos.replaceAll({
       profile: null,
@@ -593,6 +763,7 @@ describe('replaceAll', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
 
     expect(await repos.readSnapshot()).toEqual({
@@ -603,6 +774,7 @@ describe('replaceAll', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 
@@ -615,6 +787,7 @@ describe('replaceAll', () => {
     const originalPrefs = makePreferences();
     const originalAssessment = makeAssessment();
     const originalFreedomSession = makeFreedomSession();
+    const originalSleepSession = makeSleepSession();
 
     await repos.profile.save(originalProfile);
     await repos.cravings.add(originalCraving);
@@ -623,6 +796,7 @@ describe('replaceAll', () => {
     await repos.preferences.save(originalPrefs);
     await repos.beliefAssessments.add(originalAssessment);
     await repos.freedomSessions.add(originalFreedomSession);
+    await repos.sleepSessions.add(originalSleepSession);
 
     // A function value is not structured-cloneable, so IndexedDB rejects the
     // write with a DataCloneError partway through the transaction. This
@@ -644,6 +818,7 @@ describe('replaceAll', () => {
         preferences: null,
         beliefAssessments: [],
         freedomSessions: [],
+        sleepSessions: [],
       })
     ).rejects.toBeTruthy();
 
@@ -658,6 +833,7 @@ describe('replaceAll', () => {
       preferences: originalPrefs,
       beliefAssessments: [originalAssessment],
       freedomSessions: [originalFreedomSession],
+      sleepSessions: [originalSleepSession],
     });
   });
 });
@@ -672,6 +848,7 @@ describe('clearAll', () => {
     await repos.preferences.save(makePreferences());
     await repos.beliefAssessments.add(makeAssessment());
     await repos.freedomSessions.add(makeFreedomSession());
+    await repos.sleepSessions.add(makeSleepSession());
 
     await repos.clearAll();
 
@@ -683,6 +860,7 @@ describe('clearAll', () => {
       preferences: null,
       beliefAssessments: [],
       freedomSessions: [],
+      sleepSessions: [],
     });
   });
 });

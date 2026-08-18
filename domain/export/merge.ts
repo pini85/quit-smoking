@@ -11,6 +11,7 @@ export interface MergeSummary {
   newReasons: number;
   newBeliefAssessments: number;
   newFreedomSessions: number;
+  newSleepSessions: number;
   totalCravingsAfter: number;
   profileAdopted: boolean;
 }
@@ -67,6 +68,10 @@ export function mergeSnapshots(
     current.freedomSessions,
     imported.freedomSessions
   );
+  const { merged: mergedSleepUnsorted, newCount: newSleepSessions } = unionKeepingCurrent(
+    current.sleepSessions,
+    imported.sleepSessions
+  );
 
   const mergedCravings = sortByIsoField(mergedCravingsUnsorted, (c) => c.startedAt);
   const mergedReasons = sortByIsoField(mergedReasonsUnsorted, (r) => r.createdAt);
@@ -74,6 +79,7 @@ export function mergeSnapshots(
   // strings, because offsets differ), so re-sort after the union the same way.
   const mergedBeliefAssessments = sortByIsoField(mergedAssessmentsUnsorted, (a) => a.assessedAt);
   const mergedFreedomSessions = sortByIsoField(mergedFreedomUnsorted, (s) => s.startedAt);
+  const mergedSleepSessions = sortByIsoField(mergedSleepUnsorted, (s) => s.startedAt);
 
   const profileAdopted = current.profile === null && imported.profile !== null;
   const mergedProfile = current.profile ?? (profileAdopted ? imported.profile : null);
@@ -86,6 +92,7 @@ export function mergeSnapshots(
     preferences: current.preferences,
     beliefAssessments: mergedBeliefAssessments,
     freedomSessions: mergedFreedomSessions,
+    sleepSessions: mergedSleepSessions,
   };
 
   const summary: MergeSummary = {
@@ -94,6 +101,7 @@ export function mergeSnapshots(
     newReasons,
     newBeliefAssessments,
     newFreedomSessions,
+    newSleepSessions,
     totalCravingsAfter: mergedCravings.length,
     profileAdopted,
   };

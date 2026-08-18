@@ -27,6 +27,32 @@ class V1Db extends Dexie {
   }
 }
 
+/**
+ * A byte-for-byte copy of the shipped v1 + v2 `.stores({...})` blocks in
+ * `lib/persistence/db.ts` (both frozen), used the same way `V1Db` is used
+ * above: a real v2 -> v3 upgrade starts from a database that was created by
+ * the SHIPPED v1+v2 schema, not from `QuitDb` itself.
+ */
+class V2Db extends Dexie {
+  profile!: Table<QuitProfile, string>;
+  cravings!: Table<CravingSession, string>;
+
+  constructor(name: string) {
+    super(name);
+    this.version(1).stores({
+      profile: 'id',
+      cravings: 'id, startedAt, trigger, outcome',
+      achievementUnlocks: 'id',
+      reasons: 'id, createdAt',
+      preferences: 'id',
+    });
+    this.version(2).stores({
+      beliefAssessments: 'id, assessedAt, beliefId',
+      freedomSessions: 'id, startedAt',
+    });
+  }
+}
+
 // Both the v1 handle and the reopened v2 handle are tracked so each test
 // cleans up after itself even if it fails partway.
 const openDbs: Dexie[] = [];
@@ -87,6 +113,23 @@ async function seedV1(
   openDbs.pop(); // handed off: the reopened v2 handle owns deletion from here.
 }
 
+/**
+ * Seeds a v1+v2-schema database under `name` with the given rows, then
+ * CLOSES it — same rationale as `seedV1` above, one version later.
+ */
+async function seedV2(
+  name: string,
+  profile: QuitProfile,
+  cravings: CravingSession[]
+): Promise<void> {
+  const v2 = track(new V2Db(name));
+  await v2.open();
+  await v2.profile.put(profile);
+  await v2.cravings.bulkPut(cravings);
+  v2.close();
+  openDbs.pop(); // handed off: the reopened v3 handle owns deletion from here.
+}
+
 describe('QuitDb v1 -> v2 upgrade', () => {
   it('preserves existing rows and adds the two new stores, empty', async () => {
     const name = `test-migration-${crypto.randomUUID()}`;
@@ -98,12 +141,15 @@ describe('QuitDb v1 -> v2 upgrade', () => {
     const db = track(createDb(name));
     await db.open();
 
-    expect(db.verno).toBe(2);
+    // `createDb` always carries every frozen delta forward, so a v1 database
+    // opened today lands on the CURRENT version (3), not just v2.
+    expect(db.verno).toBe(3);
     expect(await db.profile.get('singleton')).toEqual(profile);
     const cravings = await db.cravings.toArray();
     expect(cravings.map((c) => c.id).sort()).toEqual([cravingA.id, cravingB.id].sort());
     expect(await db.beliefAssessments.toArray()).toEqual([]);
     expect(await db.freedomSessions.toArray()).toEqual([]);
+    expect(await db.sleepSessions.toArray()).toEqual([]);
   });
 
   it('accepts writes to the new stores on an upgraded database', async () => {
@@ -153,5 +199,58 @@ describe('QuitDb v1 -> v2 upgrade', () => {
     const row = await db.cravings.get(legacy.id);
     expect(row).toEqual(legacy);
     expect(row && 'beliefId' in row).toBe(false);
+  });
+});
+
+describe('QuitDb v2 -> v3 upgrade', () => {
+  it('preserves existing rows and adds the new sleepSessions store, empty', async () => {
+    const name = `test-migration-${crypto.randomUUID()}`;
+    const profile = makeProfile();
+    const cravingA = makeCraving({ startedAt: '2026-01-01T08:00:00Z', outcome: 'passed' });
+    const cravingB = makeCraving({ startedAt: '2026-01-02T08:00:00Z', trigger: 'coffee' });
+    await seedV2(name, profile, [cravingA, cravingB]);
+
+    const db = track(createDb(name));
+    await db.open();
+
+    expect(db.verno).toBe(3);
+    expect(await db.profile.get('singleton')).toEqual(profile);
+    const cravings = await db.cravings.toArray();
+    expect(cravings.map((c) => c.id).sort()).toEqual([cravingA.id, cravingB.id].sort());
+    expect(await db.beliefAssessments.toArray()).toEqual([]);
+    expect(await db.freedomSessions.toArray()).toEqual([]);
+    expect(await db.sleepSessions.toArray()).toEqual([]);
+  });
+
+  it('accepts writes to the new sleepSessions store on an upgraded database', async () => {
+    const name = `test-migration-${crypto.randomUUID()}`;
+    await seedV2(name, makeProfile(), [makeCraving()]);
+
+    const db = track(createDb(name));
+    const session = {
+      id: crypto.randomUUID(),
+      startedAt: '2026-03-01T22:00:00Z',
+      state: 'recording' as const,
+    };
+    await db.sleepSessions.add(session);
+
+    expect(await db.sleepSessions.toArray()).toEqual([session]);
+  });
+
+  it('full v1 -> v3 upgrade: preserves existing rows and adds every new store, empty', async () => {
+    const name = `test-migration-${crypto.randomUUID()}`;
+    const profile = makeProfile();
+    const craving = makeCraving();
+    await seedV1(name, profile, [craving]);
+
+    const db = track(createDb(name));
+    await db.open();
+
+    expect(db.verno).toBe(3);
+    expect(await db.profile.get('singleton')).toEqual(profile);
+    expect((await db.cravings.toArray()).map((c) => c.id)).toEqual([craving.id]);
+    expect(await db.beliefAssessments.toArray()).toEqual([]);
+    expect(await db.freedomSessions.toArray()).toEqual([]);
+    expect(await db.sleepSessions.toArray()).toEqual([]);
   });
 });

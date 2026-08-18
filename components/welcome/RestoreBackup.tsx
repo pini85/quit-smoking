@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent } from 'react';
-import type { ExportFileV2 } from '@/domain/export/format';
+import type { ExportFileV3 } from '@/domain/export/format';
 import { ImportError } from '@/domain/export/migrate';
 import { applyImport, previewImport } from '@/lib/persistence/exportImport';
 import { getAppRepositories } from '@/lib/services/appDb';
@@ -31,7 +31,7 @@ function plural(n: number, word: PluralWord): string {
  * counts join on the same terms. A migrated v1 file legitimately reports zero
  * for both — those collections did not exist in v1.
  */
-function countLine(file: ExportFileV2, m: Messages['welcome']['restoreBackup']): string {
+function countLine(file: ExportFileV3, m: Messages['welcome']['restoreBackup']): string {
   const parts = [
     plural(file.cravings.length, m.craving),
     plural(file.reasons.length, m.reason),
@@ -58,7 +58,7 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
   const m = useMessages();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [pending, setPending] = useState<ExportFileV2 | null>(null);
+  const [pending, setPending] = useState<ExportFileV3 | null>(null);
   const [restoring, setRestoring] = useState(false);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {

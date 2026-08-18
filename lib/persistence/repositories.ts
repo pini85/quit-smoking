@@ -6,6 +6,7 @@ import type {
   Preferences,
   BeliefAssessment,
   FreedomSession,
+  SleepSession,
 } from '@/domain/types';
 
 export interface ProfileRepository {
@@ -57,6 +58,26 @@ export interface FreedomSessionRepository {
   bulkPut(s: FreedomSession[]): Promise<void>;
 }
 
+// Unlike the append-only precedents above (beliefAssessments/freedomSessions),
+// sleep sessions have a real recording -> recorded -> analyzed lifecycle (a
+// row is written when recording starts and mutated in place as analysis
+// progresses — the same `update` shape as `CravingRepository.update`), and a
+// user can delete one night or wipe all of them at will, which the snore
+// spec treats as a privacy requirement (the same shape as
+// `ReasonRepository.remove`/`removeAll` semantics — remove-one, wipe-all).
+// `getPending` backs launch recovery: any session not yet `analyzed` needs a
+// decision (resume, finalize, or mark failed) the next time the app opens.
+export interface SleepSessionRepository {
+  add(s: SleepSession): Promise<void>;
+  update(s: SleepSession): Promise<void>; // full put by id
+  get(id: string): Promise<SleepSession | undefined>;
+  getAll(): Promise<SleepSession[]>; // sorted by startedAt asc
+  getPending(): Promise<SleepSession[]>; // state !== 'analyzed' (launch recovery)
+  remove(id: string): Promise<void>;
+  removeAll(): Promise<void>;
+  bulkPut(sessions: SleepSession[]): Promise<void>;
+}
+
 export interface Snapshot {
   profile: QuitProfile | null;
   cravings: CravingSession[];
@@ -65,6 +86,7 @@ export interface Snapshot {
   preferences: Preferences | null;
   beliefAssessments: BeliefAssessment[];
   freedomSessions: FreedomSession[];
+  sleepSessions: SleepSession[];
 }
 
 export interface Repositories {
@@ -75,6 +97,7 @@ export interface Repositories {
   preferences: PreferencesRepository;
   beliefAssessments: BeliefAssessmentRepository;
   freedomSessions: FreedomSessionRepository;
+  sleepSessions: SleepSessionRepository;
   readSnapshot(): Promise<Snapshot>; // one consistent read across all stores
   replaceAll(s: Snapshot): Promise<void>; // transactional: clear all stores + write snapshot
   clearAll(): Promise<void>;

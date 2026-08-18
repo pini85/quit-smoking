@@ -51,6 +51,7 @@ const SERVER_SNAPSHOT: AppData = {
   preferences: null,
   beliefAssessments: [],
   freedomSessions: [],
+  sleepSessions: [],
 };
 
 function getServerSnapshot(): AppData {

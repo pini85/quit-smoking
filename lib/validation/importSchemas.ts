@@ -1,15 +1,15 @@
 /**
  * zod/mini schemas validating an already-migrated import file against
- * `ExportFileV2` strictly enough to protect the database. Every optional
+ * `ExportFileV3` strictly enough to protect the database. Every optional
  * field that exists on the domain types is declared here too — `z.object()`
  * strips unknown keys, so an omitted-but-real field would silently vanish
  * from a legitimate export on reimport.
  */
 
 import * as z from 'zod/mini';
-import { TRIGGERS, OUTCOMES, BELIEFS, LOCALES } from '@/domain/types';
+import { TRIGGERS, OUTCOMES, BELIEFS, LOCALES, SLEEP_SESSION_STATES } from '@/domain/types';
 import { ImportError } from '@/domain/export/migrate';
-import type { ExportFileV2 } from '@/domain/export/format';
+import type { ExportFileV3 } from '@/domain/export/format';
 
 // Every `*At` field in the domain is documented as "ISO 8601 WITH timezone
 // offset". `Date.parse` alone is far too permissive — engines also accept
@@ -118,13 +118,53 @@ const preferencesSchema = z.object({
   showEmergingEvidence: z.boolean(),
   dismissedInstallHint: z.optional(z.boolean()),
   lastExportAt: z.optional(dateString),
+  keepSnoreClips: z.optional(z.boolean()),
   updatedAt: dateString,
+});
+
+// SnoreEvent positions are ms OFFSETS from the owning session's `startedAt`
+// (see the doc comment on `SnoreEvent` in domain/types), not ISO instants —
+// hence plain non-negative numbers here rather than `dateString`.
+const snoreEventSchema = z
+  .object({
+    startMs: z.number().check(z.gte(0)),
+    endMs: z.number().check(z.gt(0)),
+    avgDbfs: z.number().check(z.lte(0)),
+    peakDbfs: z.number().check(z.lte(0)),
+    confidence: z.number().check(z.gte(0), z.lte(1)),
+    clipPath: z.optional(nonEmptyString),
+  })
+  .check(z.refine((e) => e.endMs > e.startMs, 'endMs must be greater than startMs'));
+
+const sleepSessionMetricsSchema = z.object({
+  recordingDurationMs: z.number().check(z.gte(0)),
+  snoreDurationMs: z.number().check(z.gte(0)),
+  snorePercent: z.number().check(z.gte(0), z.lte(100)),
+  eventCount: z.number().check(z.gte(0)),
+  eventsPerHour: z.number().check(z.gte(0)),
+  avgIntensity: z.number().check(z.gte(0), z.lte(1)),
+  peakIntensity: z.number().check(z.gte(0), z.lte(1)),
+  longestEpisodeMs: z.number().check(z.gte(0)),
+  avgEventDurationMs: z.number().check(z.gte(0)),
+  snoreBurden: z.number().check(z.gte(0), z.lte(100)),
+});
+
+const sleepSessionSchema = z.object({
+  id: nonEmptyString,
+  startedAt: dateString,
+  endedAt: z.optional(dateString),
+  state: z.enum(SLEEP_SESSION_STATES),
+  interrupted: z.optional(z.boolean()),
+  preQuit: z.optional(z.boolean()),
+  analysisVersion: z.optional(nonEmptyString),
+  metrics: z.optional(sleepSessionMetricsSchema),
+  events: z.optional(z.array(snoreEventSchema)),
 });
 
 // Only the CURRENT version is validated: `validateExportFile` runs after
 // `migrateToLatest`, so anything older has already been upgraded in place.
-const exportFileV2Schema = z.object({
-  schemaVersion: z.literal(2),
+const exportFileV3Schema = z.object({
+  schemaVersion: z.literal(3),
   app: z.literal('quit-smoking'),
   exportedAt: dateString,
   profile: z.nullable(quitProfileSchema),
@@ -134,10 +174,11 @@ const exportFileV2Schema = z.object({
   preferences: z.nullable(preferencesSchema),
   beliefAssessments: z.array(beliefAssessmentSchema),
   freedomSessions: z.array(freedomSessionSchema),
+  sleepSessions: z.array(sleepSessionSchema),
 });
 
-export function validateExportFile(migrated: unknown): ExportFileV2 {
-  const result = exportFileV2Schema.safeParse(migrated);
+export function validateExportFile(migrated: unknown): ExportFileV3 {
+  const result = exportFileV3Schema.safeParse(migrated);
   if (!result.success) {
     const [firstIssue] = result.error.issues;
     const path = firstIssue.path.length > 0 ? firstIssue.path.join('.') : '(root)';

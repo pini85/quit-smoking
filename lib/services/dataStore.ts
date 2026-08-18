@@ -7,6 +7,7 @@ import type {
   PersonalReason,
   Preferences,
   QuitProfile,
+  SleepSession,
 } from '@/domain/types';
 
 /**
@@ -34,6 +35,7 @@ function initialSnapshot(): AppData {
     preferences: null,
     beliefAssessments: [],
     freedomSessions: [],
+    sleepSessions: [],
   };
 }
 
@@ -145,6 +147,31 @@ export class DataStore {
 
   async addFreedomSession(s: FreedomSession): Promise<void> {
     await this.repos.freedomSessions.add(s);
+    await this.refresh();
+  }
+
+  // Sleep sessions have a real recording -> recorded -> analyzed lifecycle
+  // (hence `update`, unlike the freedom-side add-only methods above) and can
+  // be deleted per-night or wiped entirely, which the snore spec treats as a
+  // privacy requirement (see `SleepSessionRepository`'s doc comment).
+
+  async addSleepSession(s: SleepSession): Promise<void> {
+    await this.repos.sleepSessions.add(s);
+    await this.refresh();
+  }
+
+  async updateSleepSession(s: SleepSession): Promise<void> {
+    await this.repos.sleepSessions.update(s);
+    await this.refresh();
+  }
+
+  async removeSleepSession(id: string): Promise<void> {
+    await this.repos.sleepSessions.remove(id);
+    await this.refresh();
+  }
+
+  async clearSleepSessions(): Promise<void> {
+    await this.repos.sleepSessions.removeAll();
     await this.refresh();
   }
 

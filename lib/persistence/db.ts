@@ -7,6 +7,7 @@ import type {
   Preferences,
   BeliefAssessment,
   FreedomSession,
+  SleepSession,
 } from '@/domain/types';
 
 export class QuitDb extends Dexie {
@@ -17,6 +18,7 @@ export class QuitDb extends Dexie {
   preferences!: Table<Preferences, string>;
   beliefAssessments!: Table<BeliefAssessment, string>;
   freedomSessions!: Table<FreedomSession, string>;
+  sleepSessions!: Table<SleepSession, string>;
 
   constructor(name = 'quit-smoking') {
     super(name);
@@ -40,6 +42,11 @@ export class QuitDb extends Dexie {
       beliefAssessments: 'id, assessedAt, beliefId',
       freedomSessions: 'id, startedAt',
     });
+    // v3 adds the sleep/snore store. `startedAt` is indexed for chronological
+    // reads; `state` is deliberately NOT indexed — it is only scanned via
+    // filter() over a small table during launch recovery (see v2 note on
+    // non-indexed fields).
+    this.version(3).stores({ sleepSessions: 'id, startedAt' });
   }
 }
 

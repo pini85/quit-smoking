@@ -2,7 +2,7 @@
 
 import { useRef, useState, type ChangeEvent } from 'react';
 import type { CravingSession, Preferences } from '@/domain/types';
-import type { ExportFileV2 } from '@/domain/export/format';
+import type { ExportFileV3 } from '@/domain/export/format';
 import type { MergeSummary } from '@/domain/export/merge';
 import { ImportError } from '@/domain/export/migrate';
 import { exportData, previewImport, applyImport } from '@/lib/persistence/exportImport';
@@ -79,7 +79,7 @@ function newFreedomWork(
   return parts.length > 0 ? parts.join(andJoiner) : null;
 }
 
-type PendingImport = { file: ExportFileV2; summary: MergeSummary };
+type PendingImport = { file: ExportFileV3; summary: MergeSummary };
 
 /**
  * Export/import UI. `previewImport` never writes (see its own docs); only

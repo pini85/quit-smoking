@@ -88,6 +88,87 @@ const CAPTURED_V1_EXPORT = `{
   }
 }`;
 
+/**
+ * A VERBATIM capture of a real export produced by the app while
+ * CURRENT_EXPORT_VERSION was 2 — pasted here as a literal, never regenerated
+ * from today's builders. Same guarantee as `CAPTURED_V1_EXPORT` above, one
+ * version later: if a future schema change breaks this file, a real user's
+ * real v2 backup breaks with it. Do not "fix" this fixture to match new
+ * code; migrate the code.
+ */
+const CAPTURED_V2_EXPORT = `{
+  "schemaVersion": 2,
+  "app": "quit-smoking",
+  "exportedAt": "2026-06-02T18:44:20.903Z",
+  "profile": {
+    "id": "singleton",
+    "quitAt": "2026-04-01T06:30:00+02:00",
+    "cigarettesPerDay": 12,
+    "cigarettesPerPack": 20,
+    "packPrice": 41.9,
+    "currency": "ILS",
+    "createdAt": "2026-04-01T06:31:10+02:00",
+    "updatedAt": "2026-05-30T09:12:44+02:00"
+  },
+  "cravings": [
+    {
+      "id": "c7f2b1a0-4e33-4b8a-9d21-8b3e6f4a7c19",
+      "startedAt": "2026-04-02T14:05:00+02:00",
+      "initialIntensity": 7,
+      "finalIntensity": 2,
+      "trigger": "coffee",
+      "outcome": "passed",
+      "endedAt": "2026-04-02T14:11:32+02:00",
+      "interventionIds": ["breathing"],
+      "roundCount": 1,
+      "beliefId": "reward"
+    },
+    {
+      "id": "d8a3c2b1-5f44-4c9b-ae32-9c4f7a5b8d2a",
+      "startedAt": "2026-04-05T21:47:00+02:00",
+      "initialIntensity": 5,
+      "outcome": null
+    }
+  ],
+  "achievementUnlocks": [
+    { "id": "first-day", "unlockedAt": "2026-04-02T06:30:00+02:00" }
+  ],
+  "reasons": [
+    {
+      "id": "b2c3d4e5-0000-4000-8000-000000000001",
+      "text": "Breathe easier on hikes",
+      "createdAt": "2026-04-01T06:33:12+02:00"
+    }
+  ],
+  "preferences": {
+    "id": "singleton",
+    "theme": "system",
+    "locale": "fi",
+    "showEmergingEvidence": true,
+    "lastExportAt": "2026-05-15T08:20:00+02:00",
+    "updatedAt": "2026-05-15T08:20:00+02:00"
+  },
+  "beliefAssessments": [
+    {
+      "id": "e5f6a7b8-0000-4000-8000-000000000001",
+      "beliefId": "relaxation",
+      "assessedAt": "2026-04-10T20:00:00+02:00",
+      "strength": 2,
+      "context": "brain",
+      "trigger": "stress"
+    }
+  ],
+  "freedomSessions": [
+    {
+      "id": "f6a7b8c9-0000-4000-8000-000000000001",
+      "startedAt": "2026-04-10T19:55:00+02:00",
+      "endedAt": "2026-04-10T20:00:00+02:00",
+      "kind": "brain",
+      "beliefId": "relaxation"
+    }
+  ]
+}`;
+
 function validV1(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schemaVersion: 1,
@@ -144,9 +225,18 @@ function validV2(overrides: Record<string, unknown> = {}): Record<string, unknow
   };
 }
 
+function validV3(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...validV2(),
+    schemaVersion: 3,
+    sleepSessions: [],
+    ...overrides,
+  };
+}
+
 describe('migrateToLatest', () => {
   it('is the identity function for a file already at CURRENT_EXPORT_VERSION', () => {
-    const file = validV2();
+    const file = validV3();
     expect(migrateToLatest(file)).toEqual(file);
   });
 
@@ -176,19 +266,20 @@ describe('migrateToLatest', () => {
     };
     try {
       const migrated = migrateToLatest(fakeV0);
-      // Walked 0 -> 1 (the fake step) -> 2 (the real MIGRATIONS[1]).
+      // Walked 0 -> 1 (the fake step) -> 2 -> 3 (the real MIGRATIONS[1], MIGRATIONS[2]).
       expect(migrated.schemaVersion).toBe(CURRENT_EXPORT_VERSION);
       expect(migrated.profile).toBeNull();
       expect(migrated.legacyProfile).toBeUndefined();
       expect(migrated.beliefAssessments).toEqual([]);
       expect(migrated.freedomSessions).toEqual([]);
+      expect(migrated.sleepSessions).toEqual([]);
     } finally {
       delete MIGRATIONS[0];
     }
   });
 
-  it('throws ImportError for schemaVersion 3 (newer than this app knows)', () => {
-    expect(() => migrateToLatest(validV2({ schemaVersion: 3 }))).toThrow(ImportError);
+  it('throws ImportError for schemaVersion 4 (newer than this app knows)', () => {
+    expect(() => migrateToLatest(validV2({ schemaVersion: 4 }))).toThrow(ImportError);
   });
 
   it('throws ImportError for an unknown/negative schemaVersion with no migration path', () => {
@@ -198,8 +289,10 @@ describe('migrateToLatest', () => {
 
 describe('migrateToLatest — v1 -> v2', () => {
   it('adds exactly the two new collections (empty) and bumps the version', () => {
+    // Exercises MIGRATIONS[1] in isolation, one step at a time — unlike
+    // `migrateToLatest`, which now walks all the way to schemaVersion 3.
     const v1 = validV1({ cravings: [{ id: 'c1' }], reasons: [{ id: 'r1' }] });
-    const migrated = migrateToLatest(v1);
+    const migrated = MIGRATIONS[1](v1);
 
     expect(migrated.schemaVersion).toBe(2);
     expect(migrated.beliefAssessments).toEqual([]);
@@ -216,7 +309,7 @@ describe('migrateToLatest — v1 -> v2', () => {
   it('does not mutate the input file', () => {
     const v1 = validV1();
     const clone = JSON.parse(JSON.stringify(v1));
-    migrateToLatest(v1);
+    MIGRATIONS[1](v1);
     expect(v1).toEqual(clone);
   });
 
@@ -225,8 +318,36 @@ describe('migrateToLatest — v1 -> v2', () => {
   });
 });
 
+describe('migrateToLatest — v2 -> v3', () => {
+  it('adds exactly the one new collection (empty) and bumps the version', () => {
+    const v2 = validV2({ cravings: [{ id: 'c1' }], beliefAssessments: [{ id: 'ba1' }] });
+    const migrated = migrateToLatest(v2);
+
+    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.sleepSessions).toEqual([]);
+    // Nothing else changed: same key set plus exactly the one new key.
+    expect(new Set(Object.keys(migrated))).toEqual(
+      new Set([...Object.keys(v2), 'sleepSessions'])
+    );
+    expect(migrated.cravings).toEqual(v2.cravings);
+    expect(migrated.beliefAssessments).toEqual(v2.beliefAssessments);
+    expect(migrated.freedomSessions).toEqual([]);
+  });
+
+  it('does not mutate the input file', () => {
+    const v2 = validV2();
+    const clone = JSON.parse(JSON.stringify(v2));
+    migrateToLatest(v2);
+    expect(v2).toEqual(clone);
+  });
+
+  it('MIGRATIONS[2] is registered', () => {
+    expect(typeof MIGRATIONS[2]).toBe('function');
+  });
+});
+
 describe('captured v1 export file — backward-compatibility guarantee', () => {
-  it('migrates to the current version and validates clean, gaining two empty collections', () => {
+  it('migrates to the current version and validates clean, gaining three empty collections', () => {
     const raw: unknown = JSON.parse(CAPTURED_V1_EXPORT);
     const migrated = migrateToLatest(raw);
     const file = validateExportFile(migrated);
@@ -234,6 +355,7 @@ describe('captured v1 export file — backward-compatibility guarantee', () => {
     expect(file.schemaVersion).toBe(CURRENT_EXPORT_VERSION);
     expect(file.beliefAssessments).toEqual([]);
     expect(file.freedomSessions).toEqual([]);
+    expect(file.sleepSessions).toEqual([]);
   });
 
   it('preserves every collection and every optional field of the captured file', () => {
@@ -259,5 +381,38 @@ describe('captured v1 export file — backward-compatibility guarantee', () => {
     expect(file.preferences?.dismissedInstallHint).toBe(true);
     expect(file.preferences?.lastExportAt).toBe('2026-02-01T11:02:44+02:00');
     expect(file.preferences?.showEmergingEvidence).toBe(false);
+  });
+});
+
+describe('captured v2 export file — backward-compatibility guarantee', () => {
+  it('migrates to the current version and validates clean, gaining one empty collection', () => {
+    const raw: unknown = JSON.parse(CAPTURED_V2_EXPORT);
+    const migrated = migrateToLatest(raw);
+    const file = validateExportFile(migrated);
+
+    expect(file.schemaVersion).toBe(CURRENT_EXPORT_VERSION);
+    expect(file.sleepSessions).toEqual([]);
+  });
+
+  it('preserves every collection and every optional field of the captured file', () => {
+    const file = validateExportFile(migrateToLatest(JSON.parse(CAPTURED_V2_EXPORT)));
+
+    expect(file.profile?.currency).toBe('ILS');
+    expect(file.profile?.quitAt).toBe('2026-04-01T06:30:00+02:00');
+    expect(file.cravings).toHaveLength(2);
+    expect(file.cravings[0].trigger).toBe('coffee');
+    expect(file.cravings[0].beliefId).toBe('reward');
+    expect(file.cravings[1].outcome).toBeNull();
+    expect(file.achievementUnlocks.map((u) => u.id)).toEqual(['first-day']);
+    expect(file.reasons).toHaveLength(1);
+    expect(file.preferences?.locale).toBe('fi');
+    expect(file.preferences?.theme).toBe('system');
+    expect(file.beliefAssessments).toHaveLength(1);
+    expect(file.beliefAssessments[0].beliefId).toBe('relaxation');
+    expect(file.beliefAssessments[0].trigger).toBe('stress');
+    expect(file.freedomSessions).toHaveLength(1);
+    expect(file.freedomSessions[0].kind).toBe('brain');
+    expect(file.freedomSessions[0].beliefId).toBe('relaxation');
+    expect(file.sleepSessions).toEqual([]);
   });
 });

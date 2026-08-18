@@ -25,6 +25,10 @@ export const MIGRATIONS: Record<
   // collections — never invented rows. Returns a new object; the caller's
   // file is not mutated.
   1: (file) => ({ ...file, schemaVersion: 2, beliefAssessments: [], freedomSessions: [] }),
+  // v2 -> v3: sleep/snore monitoring added the sleepSessions collection. A v2
+  // file predates it, so the honest upgrade is one empty collection — never
+  // invented rows. Returns a new object; the caller's file is not mutated.
+  2: (file) => ({ ...file, schemaVersion: 3, sleepSessions: [] }),
 };
 
 export function detectVersion(raw: unknown): number {
