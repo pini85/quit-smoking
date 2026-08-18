@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Capacitor native android platform: generated Gradle build output
+    // and copied web assets, not source we own or want linted.
+    "android/**",
   ]),
   // `domain/` is pure: every time-dependent function takes an explicit
   // `now: Date` so it can be tested at any instant and so the whole app
