@@ -204,7 +204,68 @@ export interface Preferences {
   showEmergingEvidence: boolean;
   dismissedInstallHint?: boolean;
   lastExportAt?: string;
+  keepSnoreClips?: boolean; // absent = false (privacy default OFF)
   updatedAt: string;
+}
+
+// Snore monitoring — a sleep-adjacent, opt-in feature. The native (Kotlin)
+// layer records overnight audio and writes a per-frame features file; the
+// domain layer only ever sees the derived SnoreEvent spans, never audio.
+//
+// SnoreEvent positions are intra-session ms OFFSETS from the owning
+// SleepSession's `startedAt` (durations, not row timestamps) — deliberately
+// unlike every other domain row, which stores absolute ISO-with-offset
+// instants. Two reasons: (1) the session's `startedAt` already carries the
+// timezone, so per-event offsets lose no information; (2) a night produces
+// on the order of 10^2 events, and storing each as its own ISO string would
+// meaningfully bloat both the IndexedDB rows and JSON exports for no benefit.
+export interface SnoreEvent {
+  startMs: number; // offset from SleepSession.startedAt, inclusive
+  endMs: number; // exclusive; endMs > startMs
+  avgDbfs: number; // mean RMS dBFS over member frames (<= 0); relative loudness, NEVER calibrated SPL
+  peakDbfs: number;
+  confidence: number; // 0..1, rounded to 2 decimals when stored
+  clipPath?: string; // native clip file reference; may be dangling after import to another device
+}
+
+export const SLEEP_SESSION_STATES = ['recording', 'recorded', 'analyzed', 'failed'] as const;
+export type SleepSessionState = (typeof SLEEP_SESSION_STATES)[number];
+
+export function isSleepSessionState(v: unknown): v is SleepSessionState {
+  return typeof v === 'string' && (SLEEP_SESSION_STATES as readonly string[]).includes(v);
+}
+
+export interface SleepSessionMetrics {
+  recordingDurationMs: number;
+  snoreDurationMs: number;
+  snorePercent: number; // 0..100, 1 decimal
+  eventCount: number;
+  eventsPerHour: number; // 1 decimal
+  avgIntensity: number; // 0..1 normalized relative loudness
+  peakIntensity: number; // 0..1
+  longestEpisodeMs: number; // episodes = events merged across gaps <= 60s
+  avgEventDurationMs: number; // 0 when eventCount === 0
+  snoreBurden: number; // 0..100 integer; internal app metric, NOT medical
+}
+
+// State meanings:
+// - 'recording': row written at start; native getStatus() is the source of
+//   truth for liveness (this row is NOT polled to detect a crashed session).
+// - 'recorded': stopped, full-night audio retained natively; analysis is
+//   pending or failed-retryable.
+// - 'analyzed': final state — full-night audio has been deleted natively;
+//   `metrics`/`events`/`analysisVersion` are populated and authoritative.
+// - 'failed': no analyzable audio survived (e.g. too short, corrupt file).
+export interface SleepSession {
+  id: string; // uuid; equals the native recorder sessionId
+  startedAt: string; // ISO 8601 WITH local offset (toLocalIso)
+  endedAt?: string; // absent while state === 'recording'
+  state: SleepSessionState;
+  interrupted?: boolean; // abnormal end (crash/reboot/error/low storage); metrics still valid for recorded span
+  preQuit?: boolean; // pinned at start: startedAt < profile.quitAt
+  analysisVersion?: string; // present iff state === 'analyzed'
+  metrics?: SleepSessionMetrics; // present iff analyzed — STORED, not recomputed (feature frames are discarded)
+  events?: SnoreEvent[]; // present iff analyzed
 }
 
 export interface Duration {
