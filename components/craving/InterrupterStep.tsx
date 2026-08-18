@@ -7,6 +7,7 @@ import { alreadyProved } from '@/domain/stats/cravingStats';
 import { pickInterventions } from '@/lib/services/interventionPicker';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { useMessages } from '@/lib/i18n';
 
 export type InterrupterStepProps = {
   intensity: number;
@@ -41,6 +42,7 @@ export function InterrupterStep({
   roundCount,
   onStart,
 }: InterrupterStepProps) {
+  const m = useMessages();
   const [showMore, setShowMore] = useState(false);
 
   const { primary, alternative } = useMemo(
@@ -73,7 +75,7 @@ export function InterrupterStep({
   return (
     <div className="flex min-h-[80dvh] flex-col">
       <p className="pt-6 text-[17px] text-ink-muted">
-        {roundCount > 1 ? 'Round two. Something else, then.' : "Let's do something about it."}
+        {roundCount > 1 ? m.craving.interrupter.roundTwo : m.craving.interrupter.letsDo}
       </p>
 
       <div className="mt-auto flex flex-col gap-3 pt-8">
@@ -85,7 +87,7 @@ export function InterrupterStep({
             <p className="mt-1 text-[15px] text-ink-muted">{primaryIntervention.tagline}</p>
           </div>
           <Button size="lg" fullWidth onClick={() => onStart(primary)}>
-            Start
+            {m.craving.interrupter.start}
           </Button>
         </Card>
 
@@ -136,7 +138,7 @@ export function InterrupterStep({
             onClick={() => setShowMore(true)}
             className="mx-auto min-h-11 px-4 text-[15px] text-ink-muted transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
           >
-            more ways &rarr;
+            {m.craving.interrupter.moreWays}
           </button>
         ) : null}
       </div>

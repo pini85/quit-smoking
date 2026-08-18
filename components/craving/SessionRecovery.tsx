@@ -7,6 +7,7 @@ import { classifyOpenSessions, finalizeAbandoned } from '@/lib/services/sessionF
 import { sweepAchievements } from '@/lib/services/achievementSweep';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
+import { useMessages } from '@/lib/i18n';
 import { showToast } from '@/components/ui/Toast';
 import { toLocalIso } from '@/lib/utils/iso';
 import { ResumeSessionSheet } from './ResumeSessionSheet';
@@ -33,6 +34,7 @@ const EMPTY: CravingSession[] = [];
  */
 export function SessionRecovery() {
   const { data, store } = useAppData();
+  const m = useMessages();
   const pathname = usePathname();
   const router = useRouter();
   const now = useNow(60_000);
@@ -118,7 +120,7 @@ export function SessionRecovery() {
       await store.updateCraving({ ...session, outcome, endedAt: toLocalIso(new Date()) });
     } catch (error) {
       console.error('Unsmoke: failed to save resumed craving outcome', error);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
       setBusy(false);
       // Sheet stays open with the question intact.
       return;

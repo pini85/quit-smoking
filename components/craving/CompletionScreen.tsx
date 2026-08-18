@@ -6,6 +6,7 @@ import { BELIEF_META, TRIGGER_BELIEF_SUGGESTIONS } from '@/data/beliefs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { RingPulse } from '@/components/ui/RingPulse';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 export type CompletionVariant = 'win' | 'logged';
 
@@ -23,11 +24,6 @@ export type CompletionScreenProps = {
   onBeliefChange?: (beliefId: Belief | undefined) => void;
   onDone: () => void;
 };
-
-const WIN_LINE = 'That loop just got weaker. It’s physiology, not luck.';
-const LOGGED_LINE = 'Logged. Stepping away is a real strategy — it passes either way.';
-
-const BELIEF_LABEL = 'What was it promising? — optional';
 
 /**
  * The end of a session that did not involve a cigarette.
@@ -52,6 +48,7 @@ export function CompletionScreen({
   onBeliefChange,
   onDone,
 }: CompletionScreenProps) {
+  const m = useMessages();
   // RingPulse deliberately never fires on its first render (so that merely
   // mounting an already-celebrated screen stays quiet), which means the
   // celebration has to be armed one commit later. `useDeferredValue`'s
@@ -91,12 +88,12 @@ export function CompletionScreen({
         </div>
 
         <p className="max-w-sm text-[19px] leading-relaxed text-ink">
-          {variant === 'win' ? WIN_LINE : LOGGED_LINE}
+          {variant === 'win' ? m.craving.completion.win : m.craving.completion.logged}
         </p>
 
         {variant === 'win' ? (
           <p className="text-[15px] text-ink-muted">
-            Cravings passed without smoking: {passedCount}
+            {interpolate(m.craving.completion.passedCount, { count: passedCount })}
           </p>
         ) : null}
       </div>
@@ -106,7 +103,7 @@ export function CompletionScreen({
           unanswered question costs nothing at all. */}
       {showBelief ? (
         <div className="mb-5">
-          <p className="mb-2 text-[13px] text-ink-muted">{BELIEF_LABEL}</p>
+          <p className="mb-2 text-[13px] text-ink-muted">{m.craving.completion.beliefLabel}</p>
           <div className="-mx-5 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {suggestions.map((id) => {
               const selected = beliefId === id;
@@ -133,14 +130,14 @@ export function CompletionScreen({
               }}
               className="shrink-0 whitespace-nowrap"
             >
-              Something else
+              {m.craving.completion.somethingElse}
             </Chip>
           </div>
         </div>
       ) : null}
 
       <Button size="lg" fullWidth onClick={onDone}>
-        Done
+        {m.craving.completion.done}
       </Button>
     </div>
   );

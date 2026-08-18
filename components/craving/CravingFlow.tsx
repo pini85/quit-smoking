@@ -10,6 +10,7 @@ import { useNow } from '@/lib/hooks/useNow';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
 import { buildCravingSession, withBelief, withTrigger } from '@/lib/services/cravingSession';
 import { showToast } from '@/components/ui/Toast';
+import { useMessages } from '@/lib/i18n';
 import { toLocalIso } from '@/lib/utils/iso';
 import { IntensityStep } from './IntensityStep';
 import { InterrupterStep } from './InterrupterStep';
@@ -40,6 +41,7 @@ const TIMED_KINDS: InterventionKind[] = ['urge-surf', 'delay', 'water', 'scene-c
  */
 export function CravingFlow() {
   const { data, store } = useAppData();
+  const m = useMessages();
   const router = useRouter();
   const now = useNow(60_000);
 
@@ -214,7 +216,7 @@ export function CravingFlow() {
       await store.updateCraving(next);
     } catch (error) {
       console.error('Unsmoke: failed to save craving outcome', error);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
       setSaving(false);
       // Local state is deliberately untouched: the session stays open and the
       // user stays on the re-check step with their answer still on screen.

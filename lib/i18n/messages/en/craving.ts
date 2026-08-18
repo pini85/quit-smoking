@@ -1,0 +1,68 @@
+// The craving flow: intensity, interrupters, runners, recheck, completion, slip.
+export const craving = {
+  intensity: {
+    headline: 'You’re here. That’s the hard part done.',
+    question: 'How strong is it?',
+    triggerLabel: 'What set it off? (optional)',
+  },
+  scale: {
+    groupLabel: 'Craving intensity, 1 to 10',
+    itemLabel: 'Intensity {n}',
+    previousHint: ' (where you started)',
+  },
+  interrupter: {
+    roundTwo: 'Round two. Something else, then.',
+    letsDo: 'Let’s do something about it.',
+    start: 'Start',
+    moreWays: 'more ways →',
+  },
+  runner: {
+    back: 'Back to the other ways',
+    skip: 'skip to check-in',
+    inhale: 'Breathe in…',
+    exhale: '…and let it go',
+    breathCount: 'Breath {current} of {total}',
+    swipeNext: 'Swipe for the next one',
+    proofQuestion: '{label} craving? You’ve had {total} of these. You passed {passed}.',
+    proofFade: 'They usually fade from {from} to {to} for you.',
+    done: 'Done',
+  },
+  recheck: {
+    headline: 'How strong is it now?',
+    gone: 'Gone',
+    muchWeaker: 'Much weaker',
+    stillThere: 'Still there',
+    smoked: 'I smoked',
+    stillThereSheet: 'That’s okay — some take two rounds.',
+    tryAnotherWay: 'Try another way',
+    logAndStepAway: 'Log it and step away from the phone',
+  },
+  completion: {
+    win: 'That loop just got weaker. It’s physiology, not luck.',
+    logged: 'Logged. Stepping away is a real strategy — it passes either way.',
+    passedCount: 'Cravings passed without smoking: {count}',
+    beliefLabel: 'What was it promising? — optional',
+    somethingElse: 'Something else',
+    done: 'Done',
+  },
+  slip: {
+    headline: 'Okay. Thanks for being honest — that matters more than the cigarette.',
+    body:
+      'One cigarette is a data point, not a verdict. Your body’s recovery doesn’t reset to zero, and neither does this app.',
+    stillYours: 'Still yours:',
+    daysSmokeFree: 'days smoke-free',
+    saved: 'saved',
+    cravingsBeaten: 'cravings beaten',
+    triggerLabel: 'What triggered it? — optional',
+    done: 'Done',
+  },
+  resume: {
+    question: 'You logged a craving {minutes} ago. How did it go?',
+    gone: 'Gone',
+    muchWeaker: 'Much weaker',
+    stillThere: 'Still there',
+    smoked: 'I smoked',
+    newCraving: 'I’m having a craving now →',
+    dismiss: 'Dismiss',
+  },
+};

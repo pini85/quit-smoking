@@ -9,7 +9,7 @@ import { proofLine } from '@/domain/freedom/evidence';
 import { perTriggerStats } from '@/domain/stats/cravingStats';
 import { daysSinceEpoch } from '@/domain/time';
 import { useAppData } from '@/lib/hooks/useAppData';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { toLocalIso } from '@/lib/utils/iso';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
@@ -59,6 +59,7 @@ export const UNNAMED_RESPONSE = [
 export function BrainFlow() {
   const { data, store } = useAppData();
   const { locale } = useLocale();
+  const m = useMessages();
   const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>('promise');
@@ -161,7 +162,7 @@ export function BrainFlow() {
           strength,
           context: 'brain',
         });
-        showToast('Noted.');
+        showToast(m.common.noted);
       }
 
       // Deliberately no `setSaving(false)` on the way out: the screen is
@@ -169,7 +170,7 @@ export function BrainFlow() {
       router.replace('/');
     } catch (err) {
       console.error('Unsmoke: failed to save brain session', err);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
       setSaving(false);
     }
   }
@@ -188,7 +189,7 @@ export function BrainFlow() {
           <button
             type="button"
             onClick={leaveWithoutWriting}
-            aria-label="Close and go back to today"
+            aria-label={m.brain.close}
             className="-ml-3 flex h-11 w-11 items-center justify-center rounded-full text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
           >
             <svg
@@ -259,14 +260,15 @@ function PromiseStep({
   onPick,
   onSkipNaming,
 }: PromiseStepProps) {
+  const m = useMessages();
   return (
     <div className="flex flex-1 flex-col gap-5 pt-6">
       <div>
         <h1 className="text-[26px] font-semibold leading-tight text-ink">
-          What is the cigarette promising you right now?
+          {m.brain.promise.headline}
         </h1>
         <p className="mt-2 text-[15px] leading-relaxed text-ink-muted">
-          Whichever one sounds most like the thought you are having.
+          {m.brain.promise.subheading}
         </p>
       </div>
 
@@ -295,7 +297,7 @@ function PromiseStep({
               onClick={onShowAll}
               className="min-h-11 self-start px-1 text-[14px] font-medium text-primary-strong"
             >
-              Something else it says
+              {m.brain.promise.somethingElseItSays}
             </button>
           ) : null}
         </div>
@@ -307,7 +309,7 @@ function PromiseStep({
           onClick={onSkipNaming}
           className="mt-auto min-h-11 self-start px-1 pt-6 text-left text-[15px] text-ink-muted"
         >
-          I don&rsquo;t know what it is saying
+          {m.brain.promise.dontKnow}
         </button>
       )}
     </div>
@@ -337,11 +339,12 @@ function ResponseStep({
   onDone,
   onConviction,
 }: ResponseStepProps) {
+  const m = useMessages();
   return (
     <div className="animate-fade-in flex flex-1 flex-col gap-5 pt-6">
       {belief !== null ? (
         <p className="text-[13px] leading-relaxed text-ink-faint">
-          The promise: &ldquo;{BELIEF_META[belief].promise}&rdquo;
+          {interpolate(m.brain.response.promiseLabel, { promise: BELIEF_META[belief].promise })}
         </p>
       ) : null}
 
@@ -355,14 +358,14 @@ function ResponseStep({
 
       <div className="mt-auto flex flex-col gap-4 pt-8">
         <Button fullWidth disabled={saving} onClick={onDone}>
-          Done
+          {m.brain.response.done}
         </Button>
 
         {belief !== null ? (
           <ConvictionRow
             disabled={saving}
             onSelect={onConviction}
-            hint="Whichever you tap ends this and takes you back."
+            hint={m.brain.response.convictionHint}
           />
         ) : null}
       </div>

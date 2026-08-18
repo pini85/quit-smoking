@@ -1,6 +1,8 @@
 'use client';
 
 import type { CravingOutcome, CravingSession } from '@/domain/types';
+import { formatCount } from '@/domain/i18n/units';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 
@@ -39,6 +41,8 @@ export function ResumeSessionSheet({
   onNewCraving,
   busy = false,
 }: ResumeSessionSheetProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   const elapsedMs = now.getTime() - new Date(session.startedAt).getTime();
   // Never "0 minutes ago" — the sheet only appears once the user has left the
   // flow, so the smallest honest number here is one.
@@ -47,11 +51,13 @@ export function ResumeSessionSheet({
   return (
     <Sheet open onClose={onDismiss}>
       <p className="mb-5 text-[19px] leading-relaxed text-ink">
-        You logged a craving {minutes} minute{minutes === 1 ? '' : 's'} ago. How did it go?
+        {interpolate(m.craving.resume.question, {
+          minutes: formatCount(minutes, 'minute', locale),
+        })}
       </p>
       <div className="flex flex-col gap-2">
         <Button size="lg" fullWidth disabled={busy} onClick={() => onResolve('passed')}>
-          Gone
+          {m.craving.resume.gone}
         </Button>
         <Button
           variant="secondary"
@@ -60,7 +66,7 @@ export function ResumeSessionSheet({
           disabled={busy}
           onClick={() => onResolve('much-weaker')}
         >
-          Much weaker
+          {m.craving.resume.muchWeaker}
         </Button>
         <Button
           variant="secondary"
@@ -69,7 +75,7 @@ export function ResumeSessionSheet({
           disabled={busy}
           onClick={() => onResolve('still-there')}
         >
-          Still there
+          {m.craving.resume.stillThere}
         </Button>
         <Button
           variant="ghost"
@@ -78,16 +84,16 @@ export function ResumeSessionSheet({
           disabled={busy}
           onClick={() => onResolve('smoked')}
         >
-          I smoked
+          {m.craving.resume.smoked}
         </Button>
 
         {/* Never disabled: help must stay reachable even mid-write. */}
         <Button variant="secondary" size="lg" fullWidth onClick={onNewCraving}>
-          I&rsquo;m having a craving now &rarr;
+          {m.craving.resume.newCraving}
         </Button>
 
         <Button variant="ghost" fullWidth disabled={busy} onClick={onDismiss}>
-          Dismiss
+          {m.craving.resume.dismiss}
         </Button>
       </div>
     </Sheet>

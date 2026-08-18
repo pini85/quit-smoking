@@ -6,6 +6,7 @@ import { FREEDOM_LESSONS } from '@/data/freedomLessons';
 import { pickDailyBooster } from '@/domain/freedom/lessonPicker';
 import { daysSinceEpoch, startOfLocalDay } from '@/domain/time';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
+import { useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 
@@ -34,6 +35,7 @@ export type BoosterCardProps = {
  * ticks every minute and the booster must not be recomputed under the reader.
  */
 export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
+  const m = useMessages();
   const { value: dismissedOn, set: setDismissedOn } = useLocalPref(STORAGE_KEY);
   const [expanded, setExpanded] = useState(false);
 
@@ -65,12 +67,12 @@ export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
     <Card className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-primary-strong">
-          Today&rsquo;s booster
+          {m.freedom.booster.kicker}
         </p>
         <button
           type="button"
           onClick={() => setDismissedOn(today)}
-          aria-label="Dismiss today's booster"
+          aria-label={m.freedom.booster.dismiss}
           className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
         >
           <svg
@@ -97,7 +99,7 @@ export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
           {lesson.notice ? (
             <div>
               <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-                Worth noticing
+                {m.freedom.booster.worthNoticing}
               </p>
               <p className="mt-1 text-[14px] leading-relaxed text-ink-muted">{lesson.notice}</p>
             </div>
@@ -119,7 +121,7 @@ export function BoosterCard({ assessments, cravings, now }: BoosterCardProps) {
         aria-expanded={expanded}
         className="min-h-11 self-start text-[13px] font-medium text-primary-strong"
       >
-        {expanded ? 'close' : 'read it →'}
+        {expanded ? m.freedom.booster.close : m.freedom.booster.readIt}
       </button>
     </Card>
   );

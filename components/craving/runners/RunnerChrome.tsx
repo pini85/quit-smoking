@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useMessages } from '@/lib/i18n';
 
 export type RunnerChromeProps = {
   /** Back to the chooser — the exercise wasn't the right one. */
@@ -16,13 +17,14 @@ export type RunnerChromeProps = {
  * exercise that traps you is an exercise you learn to avoid opening.
  */
 export function RunnerChrome({ onBack, onSkip, children }: RunnerChromeProps) {
+  const m = useMessages();
   return (
     <div className="animate-fade-in flex min-h-[80dvh] flex-col">
       <div className="pt-2">
         <button
           type="button"
           onClick={onBack}
-          aria-label="Back to the other ways"
+          aria-label={m.craving.runner.back}
           className="-ml-3 flex h-11 w-11 items-center justify-center rounded-full text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
         >
           <svg
@@ -49,7 +51,7 @@ export function RunnerChrome({ onBack, onSkip, children }: RunnerChromeProps) {
         onClick={onSkip}
         className="mx-auto min-h-11 px-4 text-[15px] text-ink-muted underline-offset-4 transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
       >
-        skip to check-in
+        {m.craving.runner.skip}
       </button>
     </div>
   );

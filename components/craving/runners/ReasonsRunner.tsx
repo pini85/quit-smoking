@@ -2,6 +2,7 @@
 
 import type { PersonalReason } from '@/domain/types';
 import { Button } from '@/components/ui/Button';
+import { useMessages } from '@/lib/i18n';
 import { RunnerChrome } from './RunnerChrome';
 
 export type ReasonsRunnerProps = {
@@ -19,6 +20,7 @@ export type ReasonsRunnerProps = {
  * app could say, and paraphrasing it would break the whole effect.
  */
 export function ReasonsRunner({ reasons, onComplete, onBack, onSkip }: ReasonsRunnerProps) {
+  const m = useMessages();
   return (
     <RunnerChrome onBack={onBack} onSkip={onSkip}>
       <div className="w-full">
@@ -36,13 +38,13 @@ export function ReasonsRunner({ reasons, onComplete, onBack, onSkip }: ReasonsRu
         </div>
         {reasons.length > 1 ? (
           <p className="mt-3 text-center text-[13px] text-ink-faint">
-            Swipe for the next one
+            {m.craving.runner.swipeNext}
           </p>
         ) : null}
       </div>
 
       <Button size="lg" fullWidth onClick={onComplete} className="max-w-sm">
-        Done
+        {m.craving.runner.done}
       </Button>
     </RunnerChrome>
   );

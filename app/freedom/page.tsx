@@ -9,6 +9,7 @@ import { BoosterCard } from '@/components/freedom/BoosterCard';
 import { BeliefMap } from '@/components/freedom/BeliefMap';
 import { ProofSection } from '@/components/freedom/ProofSection';
 import { ExerciseSheet } from '@/components/freedom/ExerciseSheet';
+import { useMessages } from '@/lib/i18n';
 
 function Skeleton() {
   return (
@@ -33,6 +34,7 @@ function Skeleton() {
  */
 export default function FreedomPage() {
   const { data, store } = useAppData();
+  const m = useMessages();
   const now = useNow(60000);
   const [openBelief, setOpenBelief] = useState<Belief | null>(null);
 
@@ -46,9 +48,9 @@ export default function FreedomPage() {
   return (
     <div className="flex flex-col gap-4 pt-2">
       <div>
-        <h1 className="text-[24px] font-semibold tracking-tight text-ink">Freedom</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight text-ink">{m.freedom.pageTitle}</h1>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-          The promises smoking makes, and which of them still sound convincing.
+          {m.freedom.pageSubtitle}
         </p>
       </div>
 

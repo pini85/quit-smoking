@@ -1,7 +1,8 @@
 'use client';
 
 import type { Trigger } from '@/domain/types';
-import { TRIGGER_META, TRIGGER_ORDER } from '@/data/triggers';
+import { TRIGGER_META, TRIGGER_ORDER, triggerLabel } from '@/data/triggers';
+import { useLocale } from '@/lib/i18n';
 import { Chip } from '@/components/ui/Chip';
 
 export type TriggerChipsProps = {
@@ -20,6 +21,7 @@ export type TriggerChipsProps = {
  * mid-craving, so they have to clear the 44px touch target.
  */
 export function TriggerChips({ label, value, onChange }: TriggerChipsProps) {
+  const { locale } = useLocale();
   return (
     <div>
       <p className="mb-2 text-[13px] text-ink-muted">{label}</p>
@@ -35,7 +37,7 @@ export function TriggerChips({ label, value, onChange }: TriggerChipsProps) {
               className="shrink-0 gap-1.5 whitespace-nowrap"
             >
               <span aria-hidden="true">{meta.emoji}</span>
-              <span>{meta.label}</span>
+              <span>{triggerLabel(trigger, locale)}</span>
             </Chip>
           );
         })}

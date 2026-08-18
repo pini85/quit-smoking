@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Ring } from '@/components/ui/Ring';
 import { useNow } from '@/lib/hooks/useNow';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { interpolate, useMessages } from '@/lib/i18n';
 import { RunnerChrome } from './RunnerChrome';
 
 export type BreathingRunnerProps = {
@@ -15,9 +16,6 @@ export type BreathingRunnerProps = {
 const INHALE_MS = 4000;
 const EXHALE_MS = 6000;
 const CYCLES = 6; // 6 x 10s = 60s
-
-const INHALE_COPY = 'Breathe in…';
-const EXHALE_COPY = '…and let it go';
 
 /**
  * Seconds left in the current phase, for the reduced-motion variant. Split
@@ -47,6 +45,7 @@ function PhaseCountdown({ endsAt }: { endsAt: number }) {
  * collapses to 1) and a plain per-phase countdown carries the pacing instead.
  */
 export function BreathingRunner({ onComplete, onBack, onSkip }: BreathingRunnerProps) {
+  const m = useMessages();
   const reducedMotion = useReducedMotion();
   const [phase, setPhase] = useState<'inhale' | 'exhale'>('inhale');
   const [completedCycles, setCompletedCycles] = useState(0);
@@ -109,13 +108,16 @@ export function BreathingRunner({ onComplete, onBack, onSkip }: BreathingRunnerP
       </Ring>
 
       <p aria-live="polite" className="text-[24px] font-medium text-ink">
-        {inhaling ? INHALE_COPY : EXHALE_COPY}
+        {inhaling ? m.craving.runner.inhale : m.craving.runner.exhale}
       </p>
 
       <div
         className="flex items-center gap-2"
         role="img"
-        aria-label={`Breath ${Math.min(completedCycles + 1, CYCLES)} of ${CYCLES}`}
+        aria-label={interpolate(m.craving.runner.breathCount, {
+          current: Math.min(completedCycles + 1, CYCLES),
+          total: CYCLES,
+        })}
       >
         {Array.from({ length: CYCLES }, (_, i) => (
           <span

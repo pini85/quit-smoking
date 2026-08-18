@@ -11,6 +11,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { showToast } from '@/components/ui/Toast';
+import { interpolate, useMessages } from '@/lib/i18n';
 import { ConvictionRow } from './ConvictionRow';
 
 export type ExerciseSheetProps = {
@@ -53,6 +54,7 @@ export function ExerciseSheet({
   store,
   onClose,
 }: ExerciseSheetProps) {
+  const m = useMessages();
   const [saving, setSaving] = useState(false);
   const startedAtRef = useRef<string | null>(null);
   // Latches once the session row is committed, so a retry after a FAILED
@@ -106,13 +108,13 @@ export function ExerciseSheet({
           strength,
           context: 'exercise',
         });
-        showToast('Noted.');
+        showToast(m.common.noted);
       }
 
       onClose();
     } catch (err) {
       console.error('Unsmoke: failed to save freedom session', err);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -123,13 +125,17 @@ export function ExerciseSheet({
       {beliefId !== null && lesson !== null ? (
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[13px] leading-relaxed text-ink-faint">
-            The promise: &ldquo;{BELIEF_META[beliefId].promise}&rdquo;
+            {interpolate(m.freedom.exercise.promiseLabel, {
+              promise: BELIEF_META[beliefId].promise,
+            })}
           </p>
 
           {lesson.notice ? (
             <div>
               <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-                {lesson.kind === 'exercise' ? 'The moment to catch' : 'Worth noticing'}
+                {lesson.kind === 'exercise'
+                  ? m.freedom.exercise.momentToCatch
+                  : m.freedom.exercise.worthNoticing}
               </p>
               <p className="mt-1 text-[15px] leading-relaxed text-ink">{lesson.notice}</p>
             </div>
@@ -143,7 +149,9 @@ export function ExerciseSheet({
 
           <div>
             <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-              {lesson.kind === 'exercise' ? 'What turns out to be true' : 'The idea'}
+              {lesson.kind === 'exercise'
+                ? m.freedom.exercise.whatTurnsOutTrue
+                : m.freedom.exercise.theIdea}
             </p>
             <p className="mt-1 text-[15px] leading-relaxed text-ink-muted">{lesson.idea}</p>
           </div>
@@ -151,13 +159,13 @@ export function ExerciseSheet({
           <SourceBadge kind={lesson.sourceKind} className="self-start" />
 
           <Button fullWidth disabled={saving} onClick={() => void finish()}>
-            Done
+            {m.freedom.exercise.done}
           </Button>
 
           <ConvictionRow
             disabled={saving}
             onSelect={(strength) => void finish(strength)}
-            hint="Whichever you tap closes this."
+            hint={m.freedom.exercise.convictionHint}
           />
         </div>
       ) : null}

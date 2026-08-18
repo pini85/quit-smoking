@@ -5,6 +5,7 @@ import type { Belief, BeliefAssessment } from '@/domain/types';
 import { BELIEF_META } from '@/data/beliefs';
 import { beliefGroups, beliefTrend, type BeliefGroupKey } from '@/domain/freedom/beliefState';
 import { Card } from '@/components/ui/Card';
+import { useMessages, type Messages } from '@/lib/i18n';
 
 export type BeliefMapProps = {
   assessments: BeliefAssessment[];
@@ -33,13 +34,14 @@ export type BeliefMapProps = {
  * - "Seen through" is tinted with `primary-soft`, never `accent`: amber is the
  *   celebration colour, and seeing through a promise is a quiet noticing.
  */
-const SECTIONS: { key: BeliefGroupKey; heading: string }[] = [
-  { key: 'working-through', heading: 'Still sounds convincing' },
-  { key: 'seen-through', heading: 'Seen through' },
-  { key: 'unexplored', heading: 'Not looked at yet' },
+const SECTIONS: { key: BeliefGroupKey; headingKey: keyof Messages['freedom']['map']['sections'] }[] = [
+  { key: 'working-through', headingKey: 'workingThrough' },
+  { key: 'seen-through', headingKey: 'seenThrough' },
+  { key: 'unexplored', headingKey: 'unexplored' },
 ];
 
 export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
+  const m = useMessages();
   const groups = useMemo(() => beliefGroups(assessments), [assessments]);
   const trends = useMemo(() => {
     const byBelief = new Map<Belief, boolean>();
@@ -53,15 +55,14 @@ export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
     <Card className="flex flex-col gap-5">
       <div>
         <h2 className="text-[17px] font-semibold tracking-tight text-ink">
-          What smoking promises
+          {m.freedom.map.heading}
         </h2>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-          Each of these is a promise cigarettes make. Open one when you&rsquo;re curious —
-          nothing to fill in.
+          {m.freedom.map.subheading}
         </p>
       </div>
 
-      {SECTIONS.map(({ key, heading }) => {
+      {SECTIONS.map(({ key, headingKey }) => {
         const beliefs = groups[key];
         if (beliefs.length === 0) return null;
 
@@ -70,7 +71,7 @@ export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
         return (
           <section key={key} className="flex flex-col gap-2">
             <h3 className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-              {heading}
+              {m.freedom.map.sections[headingKey]}
             </h3>
 
             <ul className="flex flex-col gap-2">
@@ -95,7 +96,7 @@ export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
                       </span>
                       {trends.get(belief) === true ? (
                         <span className="text-[12px] leading-snug text-ink-faint">
-                          Felt weaker than last time
+                          {m.freedom.map.weakerThanLastTime}
                         </span>
                       ) : null}
                     </span>

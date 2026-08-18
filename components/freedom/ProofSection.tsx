@@ -4,8 +4,9 @@ import { useMemo } from 'react';
 import type { CravingSession, Trigger } from '@/domain/types';
 import { perTriggerStats } from '@/domain/stats/cravingStats';
 import { triggerProof } from '@/domain/freedom/evidence';
-import { TRIGGER_META, TRIGGER_ORDER } from '@/data/triggers';
+import { TRIGGER_META, TRIGGER_ORDER, triggerLabel } from '@/data/triggers';
 import { Card } from '@/components/ui/Card';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 
 export type ProofSectionProps = {
   sessions: CravingSession[];
@@ -31,6 +32,8 @@ export type ProofSectionProps = {
  * the same deterministic arrangement `TriggersSection` uses.
  */
 export function ProofSection({ sessions }: ProofSectionProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   const rows = useMemo(() => {
     const perTrig = perTriggerStats(sessions);
     const entries = Object.entries(perTrig) as [
@@ -59,10 +62,10 @@ export function ProofSection({ sessions }: ProofSectionProps) {
     <Card className="flex flex-col gap-4">
       <div>
         <h2 className="text-[17px] font-semibold tracking-tight text-ink">
-          What your log already says
+          {m.freedom.proof.heading}
         </h2>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-          Where these moments have shown up most, and how they went.
+          {m.freedom.proof.subheading}
         </p>
       </div>
 
@@ -72,10 +75,10 @@ export function ProofSection({ sessions }: ProofSectionProps) {
           return (
             <li key={trigger} className="flex flex-col gap-0.5">
               <span className="text-[14px] font-medium text-ink">
-                <span aria-hidden="true">{meta.emoji}</span> {meta.label}
+                <span aria-hidden="true">{meta.emoji}</span> {triggerLabel(trigger, locale)}
               </span>
               <span className="text-[13px] tabular-nums text-ink-muted">
-                {total} times · {passed} passed without smoking
+                {interpolate(m.freedom.proof.row, { total, passed })}
               </span>
             </li>
           );

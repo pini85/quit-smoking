@@ -1,0 +1,68 @@
+export const craving = {
+  intensity: {
+    headline: 'Olet täällä. Vaikein osa on jo tehty.',
+    question: 'Kuinka voimakas se on?',
+    triggerLabel: 'Mikä sen laukaisi? (valinnainen)',
+  },
+  scale: {
+    groupLabel: 'Mielitekon voimakkuus, 1–10',
+    itemLabel: 'Voimakkuus {n}',
+    previousHint: ' (mistä aloitit)',
+  },
+  interrupter: {
+    roundTwo: 'Toinen kierros. Kokeillaan siis jotain muuta.',
+    letsDo: 'Tehdään jotain sen suhteen.',
+    start: 'Aloita',
+    moreWays: 'lisää tapoja →',
+  },
+  runner: {
+    back: 'Takaisin muihin tapoihin',
+    skip: 'siirry tarkistukseen',
+    inhale: 'Hengitä sisään…',
+    exhale: '…ja päästä irti',
+    breathCount: 'Hengitys {current}/{total}',
+    swipeNext: 'Pyyhkäise nähdäksesi seuraavan',
+    proofQuestion:
+      '{label} mieliteko? Olet kokenut näitä {total} kertaa. Selvisit {passed}:sta.',
+    proofFade: 'Ne yleensä laantuvat sinulla {from}:sta {to}:een.',
+    done: 'Valmis',
+  },
+  recheck: {
+    headline: 'Kuinka voimakas se on nyt?',
+    gone: 'Meni ohi',
+    muchWeaker: 'Paljon heikompi',
+    stillThere: 'Yhä täällä',
+    smoked: 'Poltin',
+    stillThereSheet: 'Ei se mitään — joskus tarvitaan kaksi kierrosta.',
+    tryAnotherWay: 'Kokeile toista tapaa',
+    logAndStepAway: 'Kirjaa se ja laske puhelin käsistäsi',
+  },
+  completion: {
+    win: 'Se kierre heikkeni juuri. Se on fysiologiaa, ei tuuria.',
+    logged: 'Kirjattu. Etääntyminen on todellinen strategia — se menee ohi joka tapauksessa.',
+    passedCount: 'Mielitekoja mennyt ohi ilman tupakkaa: {count}',
+    beliefLabel: 'Mitä se lupasi? — valinnainen',
+    somethingElse: 'Jotain muuta',
+    done: 'Valmis',
+  },
+  slip: {
+    headline: 'Selvä. Kiitos rehellisyydestä — se merkitsee enemmän kuin se savuke.',
+    body:
+      'Yksi savuke on havainto, ei tuomio. Kehosi toipuminen ei nollaudu, eikä tämä sovellus myöskään.',
+    stillYours: 'Yhä sinun:',
+    daysSmokeFree: 'päivää savuttomana',
+    saved: 'säästetty',
+    cravingsBeaten: 'voitettua mielitekoa',
+    triggerLabel: 'Mikä sen laukaisi? — valinnainen',
+    done: 'Valmis',
+  },
+  resume: {
+    question: 'Kirjasit mielitekon {minutes} sitten. Miten kävi?',
+    gone: 'Meni ohi',
+    muchWeaker: 'Paljon heikompi',
+    stillThere: 'Yhä täällä',
+    smoked: 'Poltin',
+    newCraving: 'Minulla on mieliteko nyt →',
+    dismiss: 'Hylkää',
+  },
+};

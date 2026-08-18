@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Trigger } from '@/domain/types';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
+import { useMessages } from '@/lib/i18n';
 import { IntensityScale } from './IntensityScale';
 import { TriggerChips } from './TriggerChips';
 
@@ -48,6 +49,7 @@ export function RecheckStep({
   onTryAnother,
   onLogStillThere,
 }: RecheckStepProps) {
+  const m = useMessages();
   const [stillThereOpen, setStillThereOpen] = useState(false);
   // Latched at mount: once the row is on screen it stays on screen, so a
   // mis-tapped chip can be tapped again to clear it.
@@ -56,7 +58,7 @@ export function RecheckStep({
   return (
     <div className="flex min-h-[80dvh] flex-col">
       <h1 className="pt-6 text-[28px] font-semibold leading-tight text-ink">
-        How strong is it now?
+        {m.craving.recheck.headline}
       </h1>
 
       <div className="mt-auto flex flex-col gap-5 pt-8">
@@ -68,7 +70,7 @@ export function RecheckStep({
 
         {askTrigger ? (
           <TriggerChips
-            label="What set it off? (optional)"
+            label={m.craving.intensity.triggerLabel}
             value={trigger}
             onChange={onTriggerChange}
           />
@@ -77,7 +79,7 @@ export function RecheckStep({
         {finalIntensity === undefined ? null : (
           <div className="animate-fade-in flex flex-col gap-2">
             <Button size="lg" fullWidth disabled={busy} onClick={onPassed}>
-              Gone
+              {m.craving.recheck.gone}
             </Button>
             <Button
               variant="secondary"
@@ -86,7 +88,7 @@ export function RecheckStep({
               disabled={busy}
               onClick={onMuchWeaker}
             >
-              Much weaker
+              {m.craving.recheck.muchWeaker}
             </Button>
             <Button
               variant="secondary"
@@ -95,10 +97,10 @@ export function RecheckStep({
               disabled={busy}
               onClick={() => setStillThereOpen(true)}
             >
-              Still there
+              {m.craving.recheck.stillThere}
             </Button>
             <Button variant="ghost" size="lg" fullWidth disabled={busy} onClick={onSmoked}>
-              I smoked
+              {m.craving.recheck.smoked}
             </Button>
           </div>
         )}
@@ -106,7 +108,7 @@ export function RecheckStep({
 
       <Sheet open={stillThereOpen} onClose={() => setStillThereOpen(false)}>
         <p className="mb-5 text-[19px] leading-relaxed text-ink">
-          That&rsquo;s okay &mdash; some take two rounds.
+          {m.craving.recheck.stillThereSheet}
         </p>
         <div className="flex flex-col gap-2">
           <Button
@@ -117,7 +119,7 @@ export function RecheckStep({
               onTryAnother();
             }}
           >
-            Try another way
+            {m.craving.recheck.tryAnotherWay}
           </Button>
           {/* Offered as soon as the user has actually tried something. Gating
               this on a SECOND round made the sheet one-way on round one:
@@ -134,7 +136,7 @@ export function RecheckStep({
                 onLogStillThere();
               }}
             >
-              Log it and step away from the phone
+              {m.craving.recheck.logAndStepAway}
             </Button>
           ) : null}
         </div>

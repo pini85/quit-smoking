@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 export type IntensityScaleProps = {
   /** The currently chosen value, if any. */
@@ -26,6 +27,7 @@ const BLOOM_MS = 250;
  * intense, not an emergency.
  */
 export function IntensityScale({ value, previous, onSelect }: IntensityScaleProps) {
+  const m = useMessages();
   const [blooming, setBlooming] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,7 +65,7 @@ export function IntensityScale({ value, previous, onSelect }: IntensityScaleProp
   }
 
   return (
-    <div className="grid grid-cols-5 gap-2" role="group" aria-label="Craving intensity, 1 to 10">
+    <div className="grid grid-cols-5 gap-2" role="group" aria-label={m.craving.scale.groupLabel}>
       {VALUES.map((n) => {
         const mix = ((n - 1) / 9) * 100;
         const style: CSSProperties = {
@@ -81,7 +83,7 @@ export function IntensityScale({ value, previous, onSelect }: IntensityScaleProp
             key={n}
             type="button"
             onClick={() => handleSelect(n)}
-            aria-label={`Intensity ${n}`}
+            aria-label={interpolate(m.craving.scale.itemLabel, { n })}
             aria-pressed={selected}
             style={style}
             className={[
@@ -97,7 +99,9 @@ export function IntensityScale({ value, previous, onSelect }: IntensityScaleProp
               .join(' ')}
           >
             {n}
-            {isPrevious ? <span className="sr-only"> (where you started)</span> : null}
+            {isPrevious ? (
+              <span className="sr-only">{m.craving.scale.previousHint}</span>
+            ) : null}
           </button>
         );
       })}

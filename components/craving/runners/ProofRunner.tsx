@@ -1,7 +1,7 @@
 'use client';
 
 import type { CravingSession, Trigger } from '@/domain/types';
-import { TRIGGER_META } from '@/data/triggers';
+import { triggerLabel } from '@/data/triggers';
 import {
   alreadyProved,
   avgFinalIntensity,
@@ -10,6 +10,7 @@ import {
 } from '@/domain/stats/cravingStats';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { RunnerChrome } from './RunnerChrome';
 
 export type ProofRunnerProps = {
@@ -35,8 +36,10 @@ export function ProofRunner({
   onBack,
   onSkip,
 }: ProofRunnerProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   const proof = alreadyProved(sessions, trigger);
-  const label = TRIGGER_META[trigger].label;
+  const label = triggerLabel(trigger, locale);
 
   // Same session set on both sides of the arrow, so "from a to b" compares
   // like with like rather than averaging different populations.
@@ -52,18 +55,21 @@ export function ProofRunner({
     <RunnerChrome onBack={onBack} onSkip={onSkip}>
       <Card className="w-full max-w-sm">
         <p className="text-[24px] font-medium leading-snug text-ink">
-          {label} craving? You&rsquo;ve had {proof?.total ?? 0} of these. You passed{' '}
-          {proof?.passed ?? 0}.
+          {interpolate(m.craving.runner.proofQuestion, {
+            label,
+            total: proof?.total ?? 0,
+            passed: proof?.passed ?? 0,
+          })}
         </p>
         {fades ? (
           <p className="mt-4 text-[17px] leading-relaxed text-ink-muted">
-            They usually fade from {from} to {to} for you.
+            {interpolate(m.craving.runner.proofFade, { from: from as number, to: to as number })}
           </p>
         ) : null}
       </Card>
 
       <Button size="lg" fullWidth onClick={onComplete} className="max-w-sm">
-        Done
+        {m.craving.runner.done}
       </Button>
     </RunnerChrome>
   );

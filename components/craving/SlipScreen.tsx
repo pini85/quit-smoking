@@ -8,6 +8,7 @@ import { formatMoney } from '@/components/home/formatMoney';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/StatTile';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { TriggerChips } from './TriggerChips';
 
 export type SlipScreenProps = {
@@ -38,44 +39,43 @@ export function SlipScreen({
   onTriggerChange,
   onDone,
 }: SlipScreenProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   // Latched at mount so a mis-tapped chip can be tapped again to clear it.
   const [askTrigger] = useState(() => trigger === undefined);
   const quitAt = new Date(profile.quitAt);
   const days = smokeFreeDuration(quitAt, now).days;
-  const saved = formatMoney(moneySaved(profile, now), profile.currency);
+  const saved = formatMoney(moneySaved(profile, now), profile.currency, locale);
   const beaten = cravingCounts(cravings).passedWithoutSmoking;
 
   return (
     <div className="animate-fade-in flex min-h-[80dvh] flex-col gap-6">
       <div className="pt-6">
         <h1 className="text-[26px] font-semibold leading-tight text-ink">
-          Okay. Thanks for being honest &mdash; that matters more than the cigarette.
+          {m.craving.slip.headline}
         </h1>
-        <p className="mt-4 text-[17px] leading-relaxed text-ink-muted">
-          One cigarette is a data point, not a verdict. Your body&rsquo;s recovery
-          doesn&rsquo;t reset to zero, and neither does this app.
-        </p>
+        <p className="mt-4 text-[17px] leading-relaxed text-ink-muted">{m.craving.slip.body}</p>
       </div>
 
       <Card className="flex flex-col gap-3">
-        <p className="text-[13px] font-medium text-ink-muted">Still yours:</p>
+        <p className="text-[13px] font-medium text-ink-muted">{m.craving.slip.stillYours}</p>
         <div className="grid grid-cols-3 gap-3">
-          <StatTile label="days smoke-free" value={days} />
-          <StatTile label="saved" value={saved} />
-          <StatTile label="cravings beaten" value={beaten} />
+          <StatTile label={m.craving.slip.daysSmokeFree} value={days} />
+          <StatTile label={m.craving.slip.saved} value={saved} />
+          <StatTile label={m.craving.slip.cravingsBeaten} value={beaten} />
         </div>
       </Card>
 
       <div className="mt-auto flex flex-col gap-5">
         {askTrigger ? (
           <TriggerChips
-            label="What triggered it? — optional"
+            label={m.craving.slip.triggerLabel}
             value={trigger}
             onChange={onTriggerChange}
           />
         ) : null}
         <Button size="lg" fullWidth onClick={onDone}>
-          Done
+          {m.craving.slip.done}
         </Button>
       </div>
     </div>

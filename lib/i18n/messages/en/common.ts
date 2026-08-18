@@ -3,4 +3,5 @@
 // different text.
 export const common = {
   saveFailed: "Couldn't save — please try again.",
+  noted: 'Noted.',
 };
