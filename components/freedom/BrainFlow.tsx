@@ -24,8 +24,12 @@ const VISIBLE_PROMISES = 6;
  * keyed by belief and has nowhere to put this, so the copy lives here — the
  * one screen that can reach the "I don't know" branch. Rotated by the same
  * day rule as the belief responses, so it is stable within a day too.
+ *
+ * Exported for the tone scan only — `data/brainResponses.ts` is walked whole by
+ * `tests/domain/freedomContent.test.ts`, and app voice living outside that file
+ * would otherwise sit outside the guard.
  */
-const UNNAMED_RESPONSE = [
+export const UNNAMED_RESPONSE = [
   'Not naming it changes nothing. The wanting turns up first and the reason gets written afterwards, to explain it.',
   'It does not need a name to pass. Whatever it was offering, it was offering it for a few minutes.',
 ];
@@ -112,10 +116,15 @@ export function BrainFlow() {
     response === null
       ? UNNAMED_RESPONSE[dayIndex % UNNAMED_RESPONSE.length]
       : response.lines[dayIndex % response.lines.length];
+  // Only the grounded form earns the proof box. `proofLine` still answers below
+  // its >= 3 gate, but with a neutral placeholder line rather than evidence —
+  // and a box saying nothing in particular reads as a claim that failed to
+  // arrive. Below the gate the response line alone is the whole answer.
   const proof =
     belief !== null && response?.proofKind === 'trigger-history'
       ? proofLine(cravings, belief)
       : null;
+  const proofText = proof?.grounded === true ? proof.text : undefined;
 
   function leaveWithoutWriting(): void {
     router.replace('/');
@@ -214,7 +223,7 @@ export function BrainFlow() {
           <ResponseStep
             belief={belief}
             line={line}
-            proofText={proof?.text}
+            proofText={proofText}
             saving={saving}
             onDone={() => void finish()}
             onConviction={(strength) => void finish(strength)}

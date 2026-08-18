@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { BELIEF_META } from '@/data/beliefs';
 import { BRAIN_RESPONSES } from '@/data/brainResponses';
 import { FREEDOM_LESSONS } from '@/data/freedomLessons';
+import { proofLine } from '@/domain/freedom/evidence';
 import { BELIEFS, isBelief, isTrigger } from '@/domain/types';
+import type { CravingSession } from '@/domain/types';
+import { UNNAMED_RESPONSE } from '@/components/freedom/BrainFlow';
 
 // Source of truth for every `principleRefs` anchor below:
 // docs/research/freedom-principles.md — A1–A17 (Carr principles), C1–C8
@@ -81,6 +84,52 @@ function collectCopy(
 }
 
 /**
+ * `domain/freedom/evidence.ts` speaks in app voice too — the neutral fallback
+ * and both grounded templates are sentences a user reads, not data — but they
+ * are string literals inside `proofLine` rather than an exported table. The
+ * only way to scan them is to render them, so each branch is built from fixed
+ * sessions: no clock, no randomness, stable numbers.
+ */
+function evidenceCopy(): Array<[string, string]> {
+  const mk = (i: number, overrides: Partial<CravingSession>): CravingSession => ({
+    id: `scan-${i}`,
+    startedAt: '2026-01-01T12:00:00Z',
+    initialIntensity: 5,
+    outcome: 'passed',
+    ...overrides,
+  });
+  const three = (overrides: Partial<CravingSession>) =>
+    [0, 1, 2].map((i) => mk(i, overrides));
+  return [
+    // Nothing logged at all — the ungrounded fallback.
+    ['proofLine.fallback', proofLine([], 'reward').text],
+    // Three resolved cravings tagged with the belief — the belief-tag template.
+    ['proofLine.byBelief', proofLine(three({ beliefId: 'reward' }), 'reward').text],
+    // No belief tags, three resolved cravings in a related context — the
+    // trigger-derived template, which also splices a TRIGGER_META label.
+    [
+      'proofLine.byTrigger',
+      proofLine(three({ trigger: 'stress' }), 'stress-relief').text,
+    ],
+  ];
+}
+
+const EVIDENCE_COPY = evidenceCopy();
+
+/**
+ * Everything the feature authors in its own voice, with no exemptions: the two
+ * content files walked whole, plus the two places freedom copy lives outside
+ * them — `BrainFlow`'s unnamed-promise answer (which `data/brainResponses.ts`
+ * has nowhere to hold) and the rendered `proofLine` sentences.
+ */
+const AUTHORED_COPY: Array<[string, string]> = [
+  ...collectCopy(FREEDOM_LESSONS, 'FREEDOM_LESSONS', []),
+  ...collectCopy(BRAIN_RESPONSES, 'BRAIN_RESPONSES', []),
+  ...collectCopy(UNNAMED_RESPONSE, 'UNNAMED_RESPONSE', []),
+  ...EVIDENCE_COPY,
+];
+
+/**
  * The scan surface: everything the freedom feature says in its own voice.
  *
  * `data/beliefs.ts` contributes its `label` values only. Its `promise` values
@@ -88,16 +137,14 @@ function collectCopy(
  * 'willpower-needed' promise quotes the word on purpose — and quoting the trap
  * is not speaking in its voice. That file's own header records the exemption.
  *
- * `data/freedomLessons.ts` and `data/brainResponses.ts` get no exemptions at
- * all: everything in them is app voice, so they are walked whole.
+ * Everything in `AUTHORED_COPY` is app voice, so it is scanned whole.
  */
 const SCANNED_COPY: Array<[string, string]> = [
   ...BELIEFS.map(
     (id) =>
       [`BELIEF_META.${id}.label`, BELIEF_META[id].label] as [string, string]
   ),
-  ...collectCopy(FREEDOM_LESSONS, 'FREEDOM_LESSONS', []),
-  ...collectCopy(BRAIN_RESPONSES, 'BRAIN_RESPONSES', []),
+  ...AUTHORED_COPY,
 ];
 
 /** Typographic apostrophes normalised so "don’t give in" cannot slip through. */
@@ -126,6 +173,13 @@ describe('freedom copy: tone and safety scan', () => {
 
   it('has copy to scan (guards against an empty or mis-shaped surface)', () => {
     expect(SCANNED_COPY.length).toBeGreaterThan(100);
+    expect(UNNAMED_RESPONSE.length).toBeGreaterThanOrEqual(2);
+    // The evidence lines are rendered rather than literal: were a gate change
+    // to collapse them onto the same fallback, this scan would be guarding one
+    // sentence three times instead of all three templates.
+    expect(new Set(EVIDENCE_COPY.map(([, text]) => text)).size).toBe(
+      EVIDENCE_COPY.length
+    );
   });
 
   it.each(BANNED)('never says %j anywhere in freedom copy', (banned) => {
@@ -136,14 +190,14 @@ describe('freedom copy: tone and safety scan', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps combat and deprivation vocabulary out of the lessons and brain responses', () => {
+  it('keeps combat and deprivation vocabulary out of every authored line', () => {
     // The rest of research-doc section E, which the brief's list only half
     // covers. E bans "battle, fight, resist, strength, or beat" as well as
     // "giving up" and "sacrifice"; the brief's `fight the` only catches one
     // inflection ("fighting the urge" slips past it), so the stems are matched
-    // here instead. Not on the brief's list, but the same doctrine — and these
-    // two files quote nothing, so there is nothing to exempt: the quoting all
-    // happens in BELIEF_META.promise.
+    // here instead. Not on the brief's list, but the same doctrine — and
+    // nothing in AUTHORED_COPY quotes anything, so there is nothing to exempt:
+    // the quoting all happens in BELIEF_META.promise.
     //
     // 'beat' is matched as a whole word: 'heartbeat' and 'beaten track' are not
     // combat framing, and the app's health content legitimately says the first.
@@ -155,16 +209,12 @@ describe('freedom copy: tone and safety scan', () => {
       'strength',
       /\bbeat/,
     ];
-    const authored = [
-      ...collectCopy(FREEDOM_LESSONS, 'FREEDOM_LESSONS', []),
-      ...collectCopy(BRAIN_RESPONSES, 'BRAIN_RESPONSES', []),
-    ];
     for (const word of doctrine) {
       const hits = (value: string) =>
         typeof word === 'string'
           ? normalise(value).includes(word)
           : word.test(normalise(value));
-      const offenders = authored
+      const offenders = AUTHORED_COPY
         .filter(([, value]) => hits(value))
         .map(([path, value]) => `${path} (${String(word)}): ${value}`);
       expect(offenders).toEqual([]);

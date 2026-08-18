@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { CravingOutcome, CravingSession } from '@/domain/types';
+import { BELIEF_META } from '@/data/beliefs';
 import { TRIGGER_META } from '@/data/triggers';
 import { INTERVENTIONS } from '@/data/interventions';
 import { formatDurationDigital } from '@/domain/time';
@@ -152,6 +153,9 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
                   : 'None'
               }
             />
+            {selected.beliefId ? (
+              <DetailRow label="It promised" value={BELIEF_META[selected.beliefId].label} />
+            ) : null}
             <DetailRow label="Outcome" value={outcomeWord(selected.outcome).text} />
             {selected.notes ? <DetailRow label="Notes" value={selected.notes} /> : null}
           </div>

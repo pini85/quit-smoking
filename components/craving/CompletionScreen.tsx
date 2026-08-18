@@ -64,8 +64,8 @@ export function CompletionScreen({
   // and once the row is on screen it stays there, so a mis-tapped chip can be
   // tapped a second time to clear it.
   const [askBelief] = useState(() => beliefId === undefined);
-  // "Something else" — an answer, not a selection. It writes nothing and
-  // simply closes the question.
+  // "Something else" — an answer, not a selection. It names nothing, so it
+  // clears whatever was tapped before it and closes the question.
   const [dismissed, setDismissed] = useState(false);
 
   // Suggestions for the context when there is one. 'other' doubles as the
@@ -122,7 +122,15 @@ export function CompletionScreen({
               );
             })}
             <Chip
-              onClick={() => setDismissed(true)}
+              onClick={() => {
+                // Retracts a promise tapped a second ago as well as closing the
+                // question: the row is already written, so leaving a tag behind
+                // would feed the evidence engine a promise the user just took
+                // back. `undefined` goes down the same path a second tap on a
+                // selected chip does, and deletes the key.
+                onBeliefChange?.(undefined);
+                setDismissed(true);
+              }}
               className="shrink-0 whitespace-nowrap"
             >
               Something else
