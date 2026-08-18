@@ -58,6 +58,7 @@ export const welcome = {
     badge: { one: 'kunniamerkki', other: 'kunniamerkkiä' },
     beliefCheckin: { one: 'uskomustarkistus', other: 'uskomustarkistusta' },
     freedomSession: { one: 'vapaus-istunto', other: 'vapaus-istuntoa' },
+    sleepNight: { one: 'seurattu yö', other: 'seurattua yötä' },
   },
   finishedToast: 'Siinä se. Tästä eteenpäin kaikki mitataan, ei luvata.',
   onboardingFailed: 'Jokin meni pieleen profiilin tallennuksessa. Yritä uudelleen.',

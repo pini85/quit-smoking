@@ -371,10 +371,13 @@ class SnoreMonitorPlugin : Plugin() {
                     },
                 )
             } catch (e: Exception) {
-                // Never log audio content -- only the exception's own
-                // (non-audio) message, e.g. a sample-rate mismatch or a
-                // decode failure reason.
-                call.reject("Feature extraction failed: ${e.message}", "EXTRACTION_FAILED")
+                // The exception's CLASS NAME only, never e.message -- same
+                // reasoning as cutClips' catch below: FeatureExtractor.extract
+                // touches real segment files, and e.message on a file-related
+                // exception conventionally embeds the full offending path,
+                // which is exactly what this file never returns across the
+                // bridge. Matches FeatureExtractor's own logging convention.
+                call.reject("Feature extraction failed: ${e.javaClass.simpleName}", "EXTRACTION_FAILED")
             } finally {
                 wakeLock?.let { if (it.isHeld) it.release() }
                 processing.set(false)

@@ -24,12 +24,17 @@ function plural(n: number, word: PluralWord): string {
 }
 
 /**
- * Every collection in the file, counted — zeroes included, which is this
+ * EVERY collection in the file, counted — zeroes included, which is this
  * line's existing convention ("0 reasons" already appears here today). This is
  * the receipt shown before a REPLACE of an empty device, so it names what the
- * file holds rather than what happens to be non-empty; the belief and freedom
- * counts join on the same terms. A migrated v1 file legitimately reports zero
- * for both — those collections did not exist in v1.
+ * file holds rather than what happens to be non-empty; the belief, freedom and
+ * monitored-night counts all join on the same terms. A migrated older file
+ * legitimately reports zero for the collections its schema version did not
+ * have (beliefs/freedom in v1, sleep sessions in v1 and v2).
+ *
+ * "Every collection" is load-bearing: this list must gain a line whenever the
+ * export schema gains a collection, or the receipt quietly under-reports what
+ * is about to be written.
  */
 function countLine(file: ExportFileV3, m: Messages['welcome']['restoreBackup']): string {
   const parts = [
@@ -38,6 +43,7 @@ function countLine(file: ExportFileV3, m: Messages['welcome']['restoreBackup']):
     plural(file.achievementUnlocks.length, m.badge),
     plural(file.beliefAssessments.length, m.beliefCheckin),
     plural(file.freedomSessions.length, m.freedomSession),
+    plural(file.sleepSessions.length, m.sleepNight),
   ];
   return `${file.profile ? m.profileWord : m.noProfileWord}${parts.join(', ')}.`;
 }

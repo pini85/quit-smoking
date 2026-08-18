@@ -93,6 +93,7 @@ export const you = {
     profileAdopted: 'profiili otettu käyttöön',
     newBeliefCheckin: { one: 'uskomustarkistus', other: 'uskomustarkistusta' },
     newFreedomSession: { one: 'vapaus-istunto', other: 'vapaus-istuntoa' },
+    newSleepNight: { one: 'seurattu yö', other: 'seurattua yötä' },
   },
   install: {
     title: 'Asenna Unsmoke',

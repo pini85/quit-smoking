@@ -60,11 +60,13 @@ function plural(n: number, word: PluralWord): string {
 
 /**
  * "3 belief check-ins and 1 freedom session", or `null` when the file brings
- * neither. Named only when non-zero, matching how the sentence above it
- * already treats the adopted profile — a v1 backup carries no belief or
- * freedom rows at all, and announcing two zeroes would just be noise.
+ * none of these. Every collection the merge counts BESIDES cravings belongs
+ * here — cravings are named unconditionally by the sentence/toast this joins,
+ * these only when non-zero, matching how that sentence already treats the
+ * adopted profile. An older backup carries no belief, freedom or sleep rows at
+ * all, and announcing three zeroes would just be noise.
  */
-function newFreedomWork(
+function newSideCounts(
   summary: MergeSummary,
   m: Messages['you']['data'],
   andJoiner: string
@@ -75,6 +77,9 @@ function newFreedomWork(
   }
   if (summary.newFreedomSessions > 0) {
     parts.push(plural(summary.newFreedomSessions, m.newFreedomSession));
+  }
+  if (summary.newSleepSessions > 0) {
+    parts.push(plural(summary.newSleepSessions, m.newSleepNight));
   }
   return parts.length > 0 ? parts.join(andJoiner) : null;
 }
@@ -95,8 +100,8 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
   const [confirmingReplace, setConfirmingReplace] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const pendingFreedomWork = pending
-    ? newFreedomWork(pending.summary, m.you.data, m.common.andJoiner)
+  const pendingSideCounts = pending
+    ? newSideCounts(pending.summary, m.you.data, m.common.andJoiner)
     : null;
   const lastExportAt = preferences?.lastExportAt ?? null;
   const staleExport =
@@ -149,8 +154,8 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
       setPending(null);
       setConfirmingReplace(false);
       const parts = [plural(summary.newCravings, m.you.data.newCraving)];
-      const freedomWork = newFreedomWork(summary, m.you.data, m.common.andJoiner);
-      if (freedomWork) parts.push(freedomWork);
+      const sideCounts = newSideCounts(summary, m.you.data, m.common.andJoiner);
+      if (sideCounts) parts.push(sideCounts);
       if (summary.profileAdopted) parts.push(m.you.data.profileAdopted);
       showToast(interpolate(m.you.data.imported, { parts: parts.join(', ') }));
     } catch (err) {
@@ -218,8 +223,8 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
                     : m.you.data.cravingWord.other,
                 newCount: pending.summary.newCravings,
               })}
-              {pendingFreedomWork
-                ? interpolate(m.you.data.alsoNewHere, { work: pendingFreedomWork })
+              {pendingSideCounts
+                ? interpolate(m.you.data.alsoNewHere, { work: pendingSideCounts })
                 : ''}
               {pending.summary.profileAdopted ? m.you.data.noProfileYet : ''}
             </p>

@@ -58,6 +58,7 @@ export const welcome = {
     badge: { one: 'badge', other: 'badges' },
     beliefCheckin: { one: 'belief check-in', other: 'belief check-ins' },
     freedomSession: { one: 'freedom session', other: 'freedom sessions' },
+    sleepNight: { one: 'monitored night', other: 'monitored nights' },
   },
   finishedToast: 'That’s it. Everything from here is measured, not promised.',
   onboardingFailed: 'Something went wrong saving your profile. Please try again.',

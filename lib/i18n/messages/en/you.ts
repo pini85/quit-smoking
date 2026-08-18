@@ -95,6 +95,7 @@ export const you = {
     profileAdopted: 'profile adopted',
     newBeliefCheckin: { one: 'belief check-in', other: 'belief check-ins' },
     newFreedomSession: { one: 'freedom session', other: 'freedom sessions' },
+    newSleepNight: { one: 'monitored night', other: 'monitored nights' },
   },
   install: {
     title: 'Install Unsmoke',
