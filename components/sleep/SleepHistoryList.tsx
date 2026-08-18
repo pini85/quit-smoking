@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { Locale, SleepSession } from '@/domain/types';
+import type { DataStore } from '@/lib/services/dataStore';
 import type { SleepSessionService } from '@/lib/services/sleepSessionService';
 import { useLocale, useMessages, type Messages } from '@/lib/i18n';
 import { dateFmt, numberFmt } from '@/lib/i18n/fmt';
@@ -13,8 +14,9 @@ import { formatSleepDuration } from './sleepService';
 
 export type SleepHistoryListProps = {
   sessions: SleepSession[];
-  /** `null` when no recorder resolved yet (or unavailable) — delete controls hide rather than throw. */
+  /** `null` when no recorder resolved yet (or unavailable) — deletes fall back to `store` directly. */
   service: SleepSessionService | null;
+  store: DataStore;
 };
 
 const HISTORY_STATES = new Set(['analyzed', 'failed']);
@@ -31,10 +33,18 @@ function nightSummary(session: SleepSession, locale: Locale, m: Messages['sleep'
 /**
  * Every analyzed/failed night, most recent first — per-night delete plus a
  * "Delete all snoring data" action, each behind its own confirm `Sheet`.
- * Both call through `SleepSessionService` (never touch the recorder or
- * store directly), so clip cleanup stays exactly the service's job.
+ *
+ * Deletion is always available, even when `service` is `null` (no recorder
+ * resolved on this device/browser, e.g. production web reviewing nights
+ * imported from another device): it's a privacy requirement, and removing a
+ * row never actually needs the recorder — an imported row's `clipPath`s
+ * point at files that were never on THIS device to begin with, so they're
+ * already dangling and there is nothing for a recorder to clean up. Prefer
+ * `service.deleteSession`/`deleteAllSessions` when available (it also tries
+ * to delete real, reachable clip files), falling back to the plain
+ * `DataStore` removal otherwise.
  */
-export function SleepHistoryList({ sessions, service }: SleepHistoryListProps) {
+export function SleepHistoryList({ sessions, service, store }: SleepHistoryListProps) {
   const { locale } = useLocale();
   const m = useMessages();
   const [pendingDelete, setPendingDelete] = useState<SleepSession | null>(null);
@@ -52,10 +62,14 @@ export function SleepHistoryList({ sessions, service }: SleepHistoryListProps) {
   if (nights.length === 0) return null;
 
   async function handleDeleteNight() {
-    if (!pendingDelete || !service || busy) return;
+    if (!pendingDelete || busy) return;
     setBusy(true);
     try {
-      await service.deleteSession(pendingDelete.id);
+      if (service) {
+        await service.deleteSession(pendingDelete.id);
+      } else {
+        await store.removeSleepSession(pendingDelete.id);
+      }
       setPendingDelete(null);
     } catch (err) {
       console.error('Unsmoke: failed to delete a sleep session', err);
@@ -66,10 +80,14 @@ export function SleepHistoryList({ sessions, service }: SleepHistoryListProps) {
   }
 
   async function handleDeleteAll() {
-    if (!service || busy) return;
+    if (busy) return;
     setBusy(true);
     try {
-      await service.deleteAllSessions();
+      if (service) {
+        await service.deleteAllSessions();
+      } else {
+        await store.clearSleepSessions();
+      }
       setConfirmDeleteAll(false);
     } catch (err) {
       console.error('Unsmoke: failed to delete all snoring data', err);
@@ -90,25 +108,21 @@ export function SleepHistoryList({ sessions, service }: SleepHistoryListProps) {
               {dateFmt(locale, { dateStyle: 'medium' }).format(new Date(session.startedAt))} ·{' '}
               {nightSummary(session, locale, m.sleep.history)}
             </p>
-            {service ? (
-              <button
-                type="button"
-                onClick={() => setPendingDelete(session)}
-                aria-label={m.sleep.history.delete}
-                className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.9]"
-              >
-                ✕
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setPendingDelete(session)}
+              aria-label={m.sleep.history.delete}
+              className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.9]"
+            >
+              ✕
+            </button>
           </Card>
         ))}
       </div>
 
-      {service ? (
-        <Button variant="secondary" fullWidth onClick={() => setConfirmDeleteAll(true)}>
-          {m.sleep.history.deleteAll}
-        </Button>
-      ) : null}
+      <Button variant="secondary" fullWidth onClick={() => setConfirmDeleteAll(true)}>
+        {m.sleep.history.deleteAll}
+      </Button>
 
       <Sheet
         open={pendingDelete !== null}

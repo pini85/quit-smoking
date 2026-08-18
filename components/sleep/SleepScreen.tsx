@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { SleepSession } from '@/domain/types';
+import { hoursBetween } from '@/domain/time';
 import { computeSnoreTrends } from '@/domain/snore/trends';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useSleepRecorder } from '@/lib/hooks/useSleepRecorder';
@@ -37,11 +38,27 @@ function LoadingHero() {
   );
 }
 
-function isToday(iso: string, now: Date): boolean {
-  const d = new Date(iso);
-  return (
-    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
-  );
+/**
+ * How long a finished night keeps the hero slot as `MorningResults` before
+ * automatically reverting to `PreSleepCard`. Anchored to `endedAt` (falling
+ * back to `startedAt` for a 'failed' row that never got one) rather than a
+ * calendar-day boundary: a session that starts at 23:18 and ends at 07:00
+ * has "yesterday's" `startedAt` but should still show its results all
+ * morning, and a 00:30 session must not pin results in place until midnight
+ * with no way to start tonight's recording. 12h comfortably covers "the
+ * rest of the day this night ended on" for any normal sleep schedule.
+ *
+ * Auto-reverting (rather than also adding a Start affordance inside
+ * `MorningResults`) is the deliberate choice here: the hero stays a strict
+ * one-card state machine, Start only ever lives on `PreSleepCard`, and
+ * last night's numbers remain visible regardless via `SleepHistoryList`/
+ * `SleepTrendSection` below.
+ */
+const RESULTS_WINDOW_HOURS = 12;
+
+function withinResultsWindow(session: SleepSession, now: Date): boolean {
+  const anchor = new Date(session.endedAt ?? session.startedAt);
+  return hoursBetween(anchor, now) < RESULTS_WINDOW_HOURS;
 }
 
 type SleepView =
@@ -55,9 +72,8 @@ type SleepView =
  * Derives which single hero card to show from native truth (`nativeStatus`,
  * refreshed at mount and after start/stop) plus the latest stored row —
  * never from recomputing recovery/adoption logic, which is entirely
- * `SleepRecovery`'s job elsewhere. A 'results' night only holds the hero
- * slot through the rest of the SAME calendar day; after that (or once a new
- * night starts) it reverts to 'pre-sleep'.
+ * `SleepRecovery`'s job elsewhere. See `RESULTS_WINDOW_HOURS` for how long a
+ * finished night holds the 'results' slot before reverting to 'pre-sleep'.
  */
 function deriveView(nativeStatus: RecorderStatus | null, sessions: SleepSession[], now: Date): SleepView {
   if (nativeStatus === null) return { phase: 'loading' };
@@ -77,7 +93,11 @@ function deriveView(nativeStatus: RecorderStatus | null, sessions: SleepSession[
   if (latest && (latest.state === 'recording' || latest.state === 'recorded')) {
     return { phase: 'analyzing', session: latest };
   }
-  if (latest && (latest.state === 'analyzed' || latest.state === 'failed') && isToday(latest.startedAt, now)) {
+  if (
+    latest &&
+    (latest.state === 'analyzed' || latest.state === 'failed') &&
+    withinResultsWindow(latest, now)
+  ) {
     return { phase: 'results', session: latest };
   }
   return { phase: 'pre-sleep' };
@@ -159,7 +179,7 @@ export function SleepScreen() {
           onStopped={() => setNativeStatus((s) => (s ? { phase: 'idle' } : s))}
         />
       ) : view.phase === 'analyzing' ? (
-        <AnalyzingCard service={service} session={view.session} />
+        <AnalyzingCard service={service} store={store} session={view.session} />
       ) : (
         <>
           <MorningResults session={view.session} trends={trends} />
@@ -171,7 +191,7 @@ export function SleepScreen() {
       )}
 
       <SleepTrendSection trends={trends} />
-      <SleepHistoryList sessions={sessions} service={service} />
+      <SleepHistoryList sessions={sessions} service={service} store={store} />
     </div>
   );
 }
