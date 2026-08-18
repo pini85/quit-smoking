@@ -26,6 +26,8 @@ export const sleep = {
     },
     start: 'Start monitoring',
     starting: 'Starting…',
+    notificationsDenied:
+      'Notifications are off for Unsmoke, so the "monitoring active" notification will stay hidden. Monitoring still works — you just have to come back here to stop it.',
     permissionDenied: {
       title: 'Microphone access needed',
       body: 'Snore monitoring needs microphone access. Enable it for Unsmoke in your phone’s Settings → Apps → Unsmoke → Permissions, then try again.',

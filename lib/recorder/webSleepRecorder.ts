@@ -16,6 +16,7 @@ import type { FeatureFrame } from '@/domain/snore/types';
 
 import type {
   CutClip,
+  RecorderPermissions,
   RecorderStatus,
   RecorderStopResult,
   SleepRecorder,
@@ -426,23 +427,30 @@ async function deleteClips(): Promise<void> {
   // No persisted clip files exist for the web-dev recorder.
 }
 
-async function permissions(): Promise<'granted' | 'denied' | 'prompt'> {
-  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'prompt';
+// `notifications` is reported 'granted' unconditionally, and honestly so:
+// this recorder posts no notification at all (there is no foreground service
+// to keep alive in a browser tab — see this file's header doc), so there is
+// nothing a notification permission could gate. The UI's notification note is
+// gated on `availability === 'native'` regardless.
+async function permissions(): Promise<RecorderPermissions> {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+    return { microphone: 'prompt', notifications: 'granted' };
+  }
   try {
     const status = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-    return status.state;
+    return { microphone: status.state, notifications: 'granted' };
   } catch {
-    return 'prompt';
+    return { microphone: 'prompt', notifications: 'granted' };
   }
 }
 
-async function requestPermissions(): Promise<'granted' | 'denied' | 'prompt'> {
+async function requestPermissions(): Promise<RecorderPermissions> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     for (const track of stream.getTracks()) track.stop();
-    return 'granted';
+    return { microphone: 'granted', notifications: 'granted' };
   } catch {
-    return 'denied';
+    return { microphone: 'denied', notifications: 'granted' };
   }
 }
 

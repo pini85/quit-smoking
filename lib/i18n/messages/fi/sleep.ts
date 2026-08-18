@@ -26,6 +26,8 @@ export const sleep = {
     },
     start: 'Aloita seuranta',
     starting: 'Aloitetaan…',
+    notificationsDenied:
+      'Unsmoken ilmoitukset ovat pois päältä, joten ”seuranta käynnissä” -ilmoitus ei näy. Seuranta toimii silti — sinun täytyy vain palata tähän näkymään lopettamaan se.',
     permissionDenied: {
       title: 'Mikrofonin käyttöoikeus tarvitaan',
       body: 'Kuorsausseuranta tarvitsee mikrofonin käyttöoikeuden. Ota se käyttöön kohdassa Asetukset → Sovellukset → Unsmoke → Käyttöoikeudet ja yritä sitten uudelleen.',

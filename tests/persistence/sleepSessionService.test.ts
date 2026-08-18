@@ -7,6 +7,7 @@ import type { Preferences, SleepSession } from '@/domain/types';
 import type {
   ClipRange,
   CutClip,
+  RecorderPermissions,
   RecorderStatus,
   RecorderStopResult,
   SleepRecorder,
@@ -75,8 +76,12 @@ class FakeRecorder implements SleepRecorder {
   cutClipsResult: CutClip[] = [];
   deleteRecordingError: unknown = null;
 
-  permissions = vi.fn(async (): Promise<'granted' | 'denied' | 'prompt'> => 'granted');
-  requestPermissions = vi.fn(async (): Promise<'granted' | 'denied' | 'prompt'> => 'granted');
+  permissions = vi.fn(
+    async (): Promise<RecorderPermissions> => ({ microphone: 'granted', notifications: 'granted' })
+  );
+  requestPermissions = vi.fn(
+    async (): Promise<RecorderPermissions> => ({ microphone: 'granted', notifications: 'granted' })
+  );
 
   start = vi.fn(async (sessionId: string) => {
     if (this.recording) {

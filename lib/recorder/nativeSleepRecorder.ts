@@ -13,19 +13,26 @@ import { SnoreMonitor } from '@/lib/native/snoreMonitor';
 import type {
   ClipRange,
   CutClip,
+  RecorderPermissions,
   RecorderStatus,
   RecorderStopResult,
   SleepRecorder,
 } from '@/lib/recorder/types';
 
-async function permissions(): Promise<'granted' | 'denied' | 'prompt'> {
+// Both permission calls pass `microphone` AND `notifications` straight
+// through: the plugin already normalizes its side to exactly the port's
+// three-value union (see `SnoreMonitorPlugin.checkPermissions`, which
+// collapses Capacitor's fourth PROMPT_WITH_RATIONALE value and reports
+// 'granted' for notifications below API 33), so there is nothing left to
+// translate here.
+async function permissions(): Promise<RecorderPermissions> {
   const result = await SnoreMonitor.checkPermissions();
-  return result.microphone;
+  return { microphone: result.microphone, notifications: result.notifications };
 }
 
-async function requestPermissions(): Promise<'granted' | 'denied' | 'prompt'> {
+async function requestPermissions(): Promise<RecorderPermissions> {
   const result = await SnoreMonitor.requestPermissions();
-  return result.microphone;
+  return { microphone: result.microphone, notifications: result.notifications };
 }
 
 async function start(

@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Preferences, SleepSession } from '@/domain/types';
 import type { DataStore } from '@/lib/services/dataStore';
 import type { SleepSessionService } from '@/lib/services/sleepSessionService';
-import type { RecorderAvailability, RecorderStatus, SleepRecorder } from '@/lib/recorder/types';
+import type {
+  RecorderAvailability,
+  RecorderPermissionState,
+  RecorderStatus,
+  SleepRecorder,
+} from '@/lib/recorder/types';
 import { toLocalIso } from '@/lib/utils/iso';
 import { defaultPreferences } from '@/lib/utils/preferences';
 import { useMessages } from '@/lib/i18n';
@@ -29,6 +34,14 @@ export type PreSleepCardProps = {
  * keep-clips preference (offering to delete already-saved clips when turned
  * off), and the Start button — which requests microphone permission first
  * and shows an honest inline notice on a denial rather than starting anyway.
+ *
+ * Notification permission is read (never requested on its own) and reported
+ * separately, because the two denials mean completely different things: no
+ * microphone means no recording at all, while no notification permission just
+ * means the ongoing-recording notification stays hidden. The elsewhere-shown
+ * "Android will continue monitoring" reassurance and the notification's Stop
+ * action are what that denial actually changes, so it is named rather than
+ * left as a surprise.
  */
 export function PreSleepCard({
   recorder,
@@ -43,6 +56,24 @@ export function PreSleepCard({
   const [starting, setStarting] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [confirmDisableClips, setConfirmDisableClips] = useState(false);
+  const [notifications, setNotifications] = useState<RecorderPermissionState | null>(null);
+
+  // `permissions()` never prompts (it is the plugin's checkPermissions), so
+  // reading it on mount is safe and shows the note before Start rather than
+  // only after. Failures are ignored: an unreadable permission state is not
+  // worth an error surface, it just leaves the note off.
+  useEffect(() => {
+    let cancelled = false;
+    void recorder.permissions().then(
+      (result) => {
+        if (!cancelled) setNotifications(result.notifications);
+      },
+      () => {}
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [recorder]);
 
   const keepClips = preferences?.keepSnoreClips === true;
   const clipPaths = sessions.flatMap(
@@ -88,10 +119,12 @@ export function PreSleepCard({
     setStarting(true);
     try {
       let permission = await recorder.permissions();
-      if (permission !== 'granted') {
+      if (permission.microphone !== 'granted') {
         permission = await recorder.requestPermissions();
       }
-      if (permission !== 'granted') {
+      // Whatever the prompt settled on, the note below reflects it from here on.
+      setNotifications(permission.notifications);
+      if (permission.microphone !== 'granted') {
         setPermissionDenied(true);
         return;
       }
@@ -164,6 +197,12 @@ export function PreSleepCard({
             {m.sleep.preSleep.permissionDenied.body}
           </p>
         </div>
+      ) : null}
+
+      {availability === 'native' && notifications === 'denied' ? (
+        <p className="text-[12px] leading-relaxed text-ink-faint">
+          {m.sleep.preSleep.notificationsDenied}
+        </p>
       ) : null}
 
       {availability === 'web-dev' ? (
