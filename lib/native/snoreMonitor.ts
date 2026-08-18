@@ -21,8 +21,18 @@
  *                        deleteSessionAudio / deleteClips — a required
  *                        argument is missing or malformed (e.g. a blank
  *                        sessionId, or a clip id outside [A-Za-z0-9_-]+)
- *  - INVALID_PATH        deleteClips — a path does not resolve under this
- *                        app's clip storage directory
+ *  - INVALID_PATH        deleteClips — NO path in the call resolved under
+ *                        this app's clip storage directory (see the
+ *                        per-entry semantics below)
+ *
+ * `deleteClips` is deliberately partial-tolerant, because callers batch:
+ * every path is checked for containment under the app's clip directory
+ * individually, entries that fail (or cannot be resolved) are SKIPPED
+ * untouched, and every valid entry in the same call is still deleted. Only a
+ * call in which no entry at all was valid rejects (`INVALID_PATH`); an empty
+ * `paths` array resolves. This matters for imported nights: their `clipPath`s
+ * reference files that only ever existed on another device, and an
+ * all-or-nothing rejection would leave this device's real clip files on disk.
  */
 import { registerPlugin } from '@capacitor/core';
 

@@ -571,14 +571,28 @@ class SnoreMonitorPlugin : Plugin() {
      *
      * Every path is canonicalized ([File.canonicalFile], which resolves
      * `..`/symlinks) and required to fall UNDER `filesDir/snore/clips/`
-     * BEFORE any deletion happens — if even one fails that containment
-     * check, the WHOLE call is rejected `INVALID_PATH` and nothing is
-     * deleted, rather than silently deleting only the valid-looking prefix
-     * of the array. This is the complementary path-traversal guard to
-     * [isSafeId]'s whitelist: [cutClips]/[deleteSessionAudio] construct
-     * paths themselves from short ids, but this call is handed full paths
-     * by the caller, so containment-under-the-clips-root is checked
+     * BEFORE any deletion happens. This is the complementary path-traversal
+     * guard to [isSafeId]'s whitelist: [cutClips]/[deleteSessionAudio]
+     * construct paths themselves from short ids, but this call is handed full
+     * paths by the caller, so containment-under-the-clips-root is checked
      * directly instead.
+     *
+     * Containment is enforced PER ENTRY: an entry that fails the check (or
+     * that cannot be canonicalized at all) is SKIPPED — never touched, never
+     * "sanitized" into something inside the root — while every valid entry in
+     * the same call is still deleted. The previous all-or-nothing rejection
+     * was wrong for the only caller: the JS side batches every clip path it
+     * knows about into one call, including paths from nights imported from
+     * ANOTHER device, which were never valid on this one. One such foreign
+     * path turned the whole batch into a no-op, leaving real local clip files
+     * on disk after the UI had already stopped showing them — the exact
+     * opposite of what a privacy delete must do.
+     *
+     * A call in which EVERY entry is invalid is still rejected `INVALID_PATH`:
+     * nothing was deleted and nothing could have been, so that is caller error
+     * worth surfacing rather than a silent success. An empty `paths` array
+     * resolves (nothing was asked for); a missing `paths` argument or a
+     * malformed entry is `INVALID_ARGUMENT`.
      */
     @PluginMethod
     fun deleteClips(call: PluginCall) {
@@ -590,18 +604,27 @@ class SnoreMonitorPlugin : Plugin() {
 
         val clipsRoot = File(context.filesDir, CLIPS_DIR_NAME).canonicalFile
         val targets = mutableListOf<File>()
+        var skipped = 0
         try {
             for (i in 0 until pathsArray.length()) {
                 val rawPath = pathsArray.getString(i)
-                val canonical = File(rawPath).canonicalFile
-                if (!isUnderDirectory(canonical, clipsRoot)) {
-                    call.reject("Path is not under the clips directory", "INVALID_PATH")
-                    return
+                // canonicalFile does real filesystem work and can throw
+                // IOException on a pathological path; that is treated exactly
+                // like failing containment -- unverifiable means untouched.
+                val canonical = runCatching { File(rawPath).canonicalFile }.getOrNull()
+                if (canonical == null || !isUnderDirectory(canonical, clipsRoot)) {
+                    skipped++
+                    continue
                 }
                 targets.add(canonical)
             }
         } catch (e: JSONException) {
             call.reject("Malformed paths entry: ${e.message}", "INVALID_ARGUMENT")
+            return
+        }
+
+        if (targets.isEmpty() && skipped > 0) {
+            call.reject("No path resolved under the clips directory", "INVALID_PATH")
             return
         }
 

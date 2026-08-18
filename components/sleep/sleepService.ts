@@ -94,6 +94,17 @@ export function formatTrendDelta(
  * own non-fatal clip-delete handling) and persists every session whose
  * events reference one of them with `clipPath` cleared, so a stored row
  * never keeps pointing at audio that no longer exists.
+ *
+ * `clipPath` is cleared for EVERY row in `clipPaths`, not only the entries
+ * native confirms it deleted, and that is deliberate. The native
+ * `deleteClips` contract is per-entry (see `lib/native/snoreMonitor.ts`): a
+ * path that resolves under the app's clip directory is really deleted, and a
+ * path that does not — the imported-from-another-device case — never
+ * referenced a file on this device in the first place. Either way the row
+ * must stop pointing at it: the first because the file is gone, the second
+ * because the reference was always dangling. Clearing all of them is
+ * therefore both simpler and strictly more honest than trying to reconstruct
+ * which entries native considered valid, which the contract does not report.
  */
 export async function deleteClipsAndUpdateSessions(
   recorder: Pick<SleepRecorder, 'deleteClips'>,
