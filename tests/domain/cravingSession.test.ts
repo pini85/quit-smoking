@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CravingSession } from '@/domain/types';
-import { buildCravingSession, withTrigger } from '@/lib/services/cravingSession';
+import { buildCravingSession, withBelief, withTrigger } from '@/lib/services/cravingSession';
 import { toLocalIso } from '@/lib/utils/iso';
 
 const STARTED_AT = new Date('2026-03-04T21:30:00');
@@ -133,5 +133,52 @@ describe('withTrigger', () => {
     expect(next.interventionIds).toEqual(['breathing']);
     expect(next.roundCount).toBe(2);
     expect(next.finalIntensity).toBe(3);
+  });
+
+  it('leaves a tagged belief alone', () => {
+    expect(withTrigger(base({ beliefId: 'reward' }), 'social').beliefId).toBe('reward');
+  });
+});
+
+describe('withBelief', () => {
+  it('tags a belief on a session that had none', () => {
+    expect(withBelief(base(), 'relaxation').beliefId).toBe('relaxation');
+  });
+
+  it('replaces an existing belief', () => {
+    expect(withBelief(base({ beliefId: 'reward' }), 'just-one').beliefId).toBe('just-one');
+  });
+
+  it('REMOVES the key when cleared, rather than writing undefined', () => {
+    const cleared = withBelief(base({ beliefId: 'reward' }), undefined);
+    expect('beliefId' in cleared).toBe(false);
+    expect(Object.keys(cleared)).not.toContain('beliefId');
+  });
+
+  it('never mutates the input', () => {
+    const original = base({ beliefId: 'reward' });
+    withBelief(original, undefined);
+    withBelief(original, 'relaxation');
+    expect(original.beliefId).toBe('reward');
+  });
+
+  it('keeps every other field intact, including the trigger and the outcome', () => {
+    const original = base({
+      trigger: 'coffee',
+      interventionIds: ['breathing'],
+      roundCount: 2,
+      finalIntensity: 3,
+      outcome: 'passed',
+      endedAt: toLocalIso(STARTED_AT),
+    });
+    const next = withBelief(original, 'coffee-ritual');
+    expect(next.id).toBe(original.id);
+    expect(next.initialIntensity).toBe(original.initialIntensity);
+    expect(next.trigger).toBe('coffee');
+    expect(next.interventionIds).toEqual(['breathing']);
+    expect(next.roundCount).toBe(2);
+    expect(next.finalIntensity).toBe(3);
+    expect(next.outcome).toBe('passed');
+    expect(next.endedAt).toBe(original.endedAt);
   });
 });

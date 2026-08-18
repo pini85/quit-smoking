@@ -2,13 +2,13 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CravingOutcome, CravingSession, Trigger } from '@/domain/types';
+import type { Belief, CravingOutcome, CravingSession, Trigger } from '@/domain/types';
 import type { InterventionKind } from '@/data/interventions';
 import { cravingCounts } from '@/domain/stats/cravingStats';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
-import { buildCravingSession, withTrigger } from '@/lib/services/cravingSession';
+import { buildCravingSession, withBelief, withTrigger } from '@/lib/services/cravingSession';
 import { showToast } from '@/components/ui/Toast';
 import { toLocalIso } from '@/lib/utils/iso';
 import { IntensityStep } from './IntensityStep';
@@ -146,6 +146,26 @@ export function CravingFlow() {
       return;
     }
     commit(withTrigger(current, trigger));
+  }
+
+  /**
+   * Tags what the craving felt like it was promising. Only reachable from the
+   * completion screen — i.e. after `handleOutcome` has already AWAITED the
+   * terminal write — so the row being updated is a closed, saved session and
+   * the fire-and-forget put is the right shape, exactly as it is for a trigger
+   * edited on the way out.
+   *
+   * `sessionRef.current`, never `session`: the same stale-closure rule that
+   * governs every other write here.
+   *
+   * This writes a tag on the craving and nothing else. Naming a promise is not
+   * a claim about how strongly it is believed, so no `BeliefAssessment` is
+   * recorded — that measurement belongs to the flows that actually ask for it.
+   */
+  function handleBeliefChange(beliefId: Belief | undefined): void {
+    const current = sessionRef.current;
+    if (current === null) return;
+    commit(withBelief(current, beliefId));
   }
 
   function handleStartIntervention(kind: InterventionKind): void {
@@ -328,6 +348,9 @@ export function CravingFlow() {
           initialIntensity={session.initialIntensity}
           finalIntensity={session.finalIntensity}
           passedCount={passedCount}
+          trigger={session.trigger}
+          beliefId={session.beliefId}
+          onBeliefChange={handleBeliefChange}
           onDone={handleDone}
         />
       ) : null}

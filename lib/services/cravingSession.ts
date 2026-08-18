@@ -7,7 +7,7 @@
  * rather than by care.
  */
 
-import type { CravingSession, Trigger } from '@/domain/types';
+import type { Belief, CravingSession, Trigger } from '@/domain/types';
 import { toLocalIso } from '@/lib/utils/iso';
 
 export interface BuildCravingSessionInput {
@@ -48,6 +48,28 @@ export function withTrigger(
     delete next.trigger;
   } else {
     next.trigger = trigger;
+  }
+  return next;
+}
+
+/**
+ * Sets or CLEARS the promise the craving was making, removing the key entirely
+ * when cleared — same reason as `withTrigger`: an explicit `beliefId: undefined`
+ * exports as null and the import schema rejects it.
+ *
+ * This is a tag on the craving row and nothing more. Naming what a craving felt
+ * like it was offering is not a statement about how much the belief is
+ * believed, so nothing here writes a `BeliefAssessment`.
+ */
+export function withBelief(
+  session: CravingSession,
+  beliefId: Belief | undefined
+): CravingSession {
+  const next = { ...session };
+  if (beliefId === undefined) {
+    delete next.beliefId;
+  } else {
+    next.beliefId = beliefId;
   }
   return next;
 }
