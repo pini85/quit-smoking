@@ -28,6 +28,52 @@ data class SegmentInfo(val fileName: String)
 class UnsupportedSampleRateException(message: String) : IOException(message)
 
 /**
+ * Pure per-segment iteration + error-recovery loop, factored out of
+ * [FeatureExtractor.extract] specifically so it is unit-testable on the
+ * plain JVM without invoking any `android.media.*` API — see
+ * `FeatureExtractorSegmentLoopTest.kt`, which exercises it with fake
+ * producers instead of real decode calls.
+ *
+ * Runs [decodeOne] once per index in `0 until segmentCount`, in order. Each
+ * call is expected to perform whatever per-frame side effects the caller
+ * closed over (in practice: `writer.writeFrame(frame); frameCount++`) some
+ * number of times — possibly zero — strictly BEFORE either returning
+ * normally or throwing. That ordering is exactly what makes frame counting
+ * survive a mid-segment failure: those side effects already happened by the
+ * time this function's `catch` runs, so a later segment's exception can
+ * never roll back frames a caller has already streamed to disk from
+ * *earlier* segments, nor even from the *same* segment's earlier hops.
+ * (Previously, [FeatureExtractor] counted frames via a per-segment `Int`
+ * return value instead — which meant a segment that decoded 50 frames and
+ * then threw on hop 51 discarded all 50, since `frameCount +=
+ * extractSegment(...)` never executes when the call throws.)
+ *
+ * [UnsupportedSampleRateException] is NOT caught here: it always
+ * propagates to the caller, since a wrong sample rate means the whole
+ * extraction is untrustworthy, not just this one segment (see that
+ * exception's own doc). Any other exception is reported via
+ * [onSegmentFailed] and iteration stops there — later segments are never
+ * attempted — modeling "truncated/corrupt final segment: stop gracefully,
+ * keep what was extracted."
+ */
+internal fun runSegmentsWithRecovery(
+    segmentCount: Int,
+    decodeOne: (index: Int) -> Unit,
+    onSegmentFailed: (index: Int, e: Exception) -> Unit,
+) {
+    for (index in 0 until segmentCount) {
+        try {
+            decodeOne(index)
+        } catch (e: UnsupportedSampleRateException) {
+            throw e
+        } catch (e: Exception) {
+            onSegmentFailed(index, e)
+            return
+        }
+    }
+}
+
+/**
  * Streaming AAC-to-`features.bin` extractor: decodes each finalized segment
  * of a recording session, in order, through [MediaExtractor] + [MediaCodec],
  * and feeds the resulting 16-bit PCM into [FeatureMath.computeFrame] one
@@ -50,6 +96,22 @@ object FeatureExtractor {
     private const val DEQUEUE_TIMEOUT_US = 10_000L
 
     /**
+     * Once end-of-stream has been queued to the input side, the decoder is
+     * expected to flush its remaining output quickly (typically well under
+     * a second for a single AAC segment) — if [DEQUEUE_TIMEOUT_US]-spaced
+     * polls go this long without ANY output progress (a real output buffer
+     * or a format-changed event), something is wrong with this codec
+     * instance (observed on some vendor decoders when fed corrupt input
+     * near end-of-file) and the drain loop must not spin forever: it would
+     * otherwise never return, leaving the `PluginCall` unsettled and the
+     * plugin's `processing` guard stuck `true` for the rest of the process
+     * lifetime. Chosen generously relative to real decode latency, in the
+     * same spirit as `RecordingService.ROTATION_WATCHDOG_MS` (8s) for its
+     * own "boundary event that should have already happened" watchdog.
+     */
+    private const val OUTPUT_STALL_TIMEOUT_MS = 10_000L
+
+    /**
      * Decodes [segments] (in order, relative to [sessionDir]) and streams
      * their features into [outFile], returning the number of frames
      * actually written (the authoritative count patched into the file's
@@ -57,13 +119,17 @@ object FeatureExtractor {
      *
      * If a segment's own decode fails outright (corrupt/truncated file —
      * expected for an overnight recording's still-partially-written final
-     * segment if the app or device died mid-recording), that is caught
-     * here: extraction stops at that point, keeping every frame already
-     * written from earlier segments, and only the segment's index and the
-     * frame count so far are logged (never any audio content). A sample
-     * rate mismatch ([UnsupportedSampleRateException]) is different: it is
-     * NOT caught here and propagates to the caller, since it means the
-     * whole extraction — not just this segment — is untrustworthy.
+     * segment if the app or device died mid-recording — or a stalled
+     * decoder, see [OUTPUT_STALL_TIMEOUT_MS]), that is caught here:
+     * extraction stops at that point, keeping every frame already written
+     * from earlier segments AND from the failing segment itself up to the
+     * point it failed (see [runSegmentsWithRecovery]'s doc on why
+     * `frameCount` is incremented from inside the write callback rather
+     * than from a per-segment return value), and only the segment's index
+     * and the frame count so far are logged (never any audio content). A
+     * sample rate mismatch ([UnsupportedSampleRateException]) is different:
+     * it is NOT caught here and propagates to the caller, since it means
+     * the whole extraction — not just this segment — is untrustworthy.
      */
     fun extract(sessionDir: File, segments: List<SegmentInfo>, outFile: File, startedAtEpochMs: Long): Int {
         val writer = FeaturesFileWriter(
@@ -74,40 +140,43 @@ object FeatureExtractor {
         )
         val accumulator = FrameAccumulator(FeatureMath.FRAME_SIZE)
         var frameCount = 0
-        var fatal: Exception? = null
         try {
-            for ((index, segment) in segments.withIndex()) {
-                val segmentFile = File(sessionDir, segment.fileName)
-                try {
-                    frameCount += extractSegment(segmentFile, accumulator) { frame ->
+            runSegmentsWithRecovery(
+                segmentCount = segments.size,
+                decodeOne = { index ->
+                    val segmentFile = File(sessionDir, segments[index].fileName)
+                    extractSegment(segmentFile, accumulator) { frame ->
+                        // Counted HERE, at the point of writing, not from
+                        // extractSegment's return value — so a frame
+                        // already streamed to disk before a later
+                        // mid-segment failure is never discarded from the
+                        // authoritative count (see runSegmentsWithRecovery).
                         writer.writeFrame(frame)
+                        frameCount++
                     }
-                } catch (e: UnsupportedSampleRateException) {
-                    fatal = e
-                    break
-                } catch (e: Exception) {
+                },
+                onSegmentFailed = { index, e ->
                     Log.w(
                         TAG,
                         "segment $index of ${segments.size} failed to decode after $frameCount frames extracted; stopping extraction (${e.javaClass.simpleName})",
                     )
-                    break
-                }
-            }
+                },
+            )
         } finally {
             writer.finish(frameCount)
         }
-        fatal?.let { throw it }
         return frameCount
     }
 
     /**
-     * Decodes one segment file, returning the number of hops (frames)
-     * completed from it. [accumulator] is shared across the whole session
-     * (see the class doc) so a partial hop at this segment's end carries
-     * over into the next segment's decode.
+     * Decodes one segment file. [accumulator] is shared across the whole
+     * session (see the class doc) so a partial hop at this segment's end
+     * carries over into the next segment's decode. [onFrame] is invoked
+     * synchronously for every completed hop, before this function returns
+     * OR throws — see [runSegmentsWithRecovery]'s doc for why that
+     * ordering is what makes frame counting survive a mid-segment failure.
      */
-    private fun extractSegment(file: File, accumulator: FrameAccumulator, onFrame: (FloatArray) -> Unit): Int {
-        var framesWritten = 0
+    private fun extractSegment(file: File, accumulator: FrameAccumulator, onFrame: (FloatArray) -> Unit) {
         val extractor = MediaExtractor()
         try {
             extractor.setDataSource(file.absolutePath)
@@ -141,6 +210,14 @@ object FeatureExtractor {
                 val bufferInfo = MediaCodec.BufferInfo()
                 var sawInputEos = false
                 var sawOutputEos = false
+                // Tracks the last time ANY output progress was observed (a
+                // real output buffer or a format change); only consulted
+                // once sawInputEos is true -- see OUTPUT_STALL_TIMEOUT_MS's
+                // doc. Reset the instant end-of-stream is queued, so the
+                // deadline measures "time since we started expecting the
+                // final drain," not time since some earlier, unrelated
+                // output event.
+                var lastProgressAtMs = System.currentTimeMillis()
 
                 while (!sawOutputEos) {
                     if (!sawInputEos) {
@@ -152,6 +229,7 @@ object FeatureExtractor {
                             if (sampleSize < 0) {
                                 codec.queueInputBuffer(inputIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                                 sawInputEos = true
+                                lastProgressAtMs = System.currentTimeMillis()
                             } else {
                                 codec.queueInputBuffer(inputIndex, 0, sampleSize, extractor.sampleTime, 0)
                                 extractor.advance()
@@ -162,16 +240,14 @@ object FeatureExtractor {
                     val outputIndex = codec.dequeueOutputBuffer(bufferInfo, DEQUEUE_TIMEOUT_US)
                     when {
                         outputIndex >= 0 -> {
+                            lastProgressAtMs = System.currentTimeMillis()
                             if (bufferInfo.size > 0) {
                                 val outputBuffer = codec.getOutputBuffer(outputIndex)
                                     ?: throw IOException("codec returned no output buffer")
                                 outputBuffer.position(bufferInfo.offset)
                                 outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
                                 val mono = pcm16ToMonoShorts(outputBuffer, channelCount)
-                                accumulator.push(mono) { hop ->
-                                    onFrame(FeatureMath.computeFrame(hop))
-                                    framesWritten++
-                                }
+                                accumulator.push(mono) { hop -> onFrame(FeatureMath.computeFrame(hop)) }
                             }
                             codec.releaseOutputBuffer(outputIndex, false)
                             if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
@@ -179,22 +255,36 @@ object FeatureExtractor {
                             }
                         }
                         outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                            lastProgressAtMs = System.currentTimeMillis()
                             val newFormat = codec.outputFormat
                             channelCount = newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                             sampleRate = newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                             requireExpectedSampleRate(sampleRate)
                         }
-                        // INFO_TRY_AGAIN_LATER / the deprecated INFO_OUTPUT_BUFFERS_CHANGED: no-op, loop again.
+                        // INFO_TRY_AGAIN_LATER / the deprecated INFO_OUTPUT_BUFFERS_CHANGED: no progress this iteration.
+                    }
+
+                    if (sawInputEos && System.currentTimeMillis() - lastProgressAtMs > OUTPUT_STALL_TIMEOUT_MS) {
+                        throw IOException(
+                            "decoder produced no output for ${OUTPUT_STALL_TIMEOUT_MS}ms after end-of-stream was queued",
+                        )
                     }
                 }
             } finally {
-                codec.stop()
+                try {
+                    codec.stop()
+                } catch (e: IllegalStateException) {
+                    // stop() throws from an uninitialized/error codec state
+                    // (e.g. configure()/start() itself failed, or a prior
+                    // exception left the codec mid-operation) -- release()
+                    // below is what actually matters for avoiding a leaked
+                    // native codec instance, so this must not skip it.
+                }
                 codec.release()
             }
         } finally {
             extractor.release()
         }
-        return framesWritten
     }
 
     private fun requireExpectedSampleRate(sampleRate: Int) {
