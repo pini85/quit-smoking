@@ -99,7 +99,22 @@ object ClipCutter {
                 bufferInfo.offset = 0
                 bufferInfo.size = sampleSize
                 bufferInfo.presentationTimeUs = sampleTimeUs - baseTimeUs
-                bufferInfo.flags = extractor.sampleFlags
+                // MediaExtractor.sampleFlags (SAMPLE_FLAG_*) and
+                // MediaCodec.BufferInfo.flags (BUFFER_FLAG_*) are different,
+                // independently-defined constant spaces that only happen to
+                // agree on the sync/key-frame bit — SAMPLE_FLAG_ENCRYPTED (2)
+                // collides with the unrelated BUFFER_FLAG_CODEC_CONFIG (2),
+                // for instance. Translate explicitly bit-by-bit rather than
+                // passing the extractor's value straight through.
+                var muxerFlags = 0
+                val extractorFlags = extractor.sampleFlags
+                if (extractorFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
+                    muxerFlags = muxerFlags or MediaCodec.BUFFER_FLAG_KEY_FRAME
+                }
+                if (extractorFlags and MediaExtractor.SAMPLE_FLAG_PARTIAL_FRAME != 0) {
+                    muxerFlags = muxerFlags or MediaCodec.BUFFER_FLAG_PARTIAL_FRAME
+                }
+                bufferInfo.flags = muxerFlags
                 newMuxer.writeSampleData(muxerTrackIndex, buffer, bufferInfo)
                 extractor.advance()
             }

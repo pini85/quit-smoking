@@ -113,6 +113,11 @@ class SessionStore(context: Context) {
 
     private fun read(): SessionState = SessionStateCodec.parse(prefs.getString(KEY_STATE, null))
 
+    // Lint's ApplySharedPref suggestion (apply() instead of commit()) is
+    // deliberately not followed here — see the class doc: apply()'s
+    // background write would reopen exactly the crash-durability gap this
+    // class exists to close.
+    @Suppress("ApplySharedPref")
     private fun write(state: SessionState) {
         prefs.edit().putString(KEY_STATE, SessionStateCodec.serialize(state)).commit()
     }

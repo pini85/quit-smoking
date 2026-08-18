@@ -104,11 +104,25 @@ class RecordingService : Service() {
         // now, there is nothing to record; tear down instead of crashing
         // the process.
         try {
-            startForeground(
-                NOTIF_ID,
-                buildNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-            )
+            // The 3-arg startForeground(id, notification, foregroundServiceType)
+            // overload itself requires API 29 (Q) — calling it on API 26-28
+            // throws NoSuchMethodError at runtime despite compiling fine
+            // (compileSdk is 36). But the specific FOREGROUND_SERVICE_TYPE_MICROPHONE
+            // constant we pass wasn't added until API 30 (R) — one version
+            // later than the overload itself — so the gate is R, not Q:
+            // below R there is no valid "microphone" foreground-service type
+            // to declare at all (the manifest's foregroundServiceType
+            // attribute is simply ignored on those older versions), so the
+            // 2-arg overload is the correct — not a degraded — call there.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                startForeground(
+                    NOTIF_ID,
+                    buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                )
+            } else {
+                startForeground(NOTIF_ID, buildNotification())
+            }
         } catch (e: Exception) {
             stopSelf()
             return START_NOT_STICKY
