@@ -15,7 +15,6 @@
 import type { FeatureFrame } from '@/domain/snore/types';
 
 import type {
-  ClipRange,
   CutClip,
   RecorderStatus,
   RecorderStopResult,
@@ -405,20 +404,20 @@ async function getFeatures(sessionId: string): Promise<FeatureFrame[]> {
   return sessionFrames.get(sessionId) ?? [];
 }
 
-async function cutClips(_sessionId: string, _clips: ClipRange[]): Promise<CutClip[]> {
+async function cutClips(): Promise<CutClip[]> {
   // The web-dev recorder never wrote clip files — nothing to cut from.
   return [];
 }
 
-function getClipUrl(_path: string): string | null {
+function getClipUrl(): string | null {
   return null;
 }
 
-async function deleteRecording(_sessionId: string, _keepClips: boolean): Promise<void> {
+async function deleteRecording(): Promise<void> {
   // No persisted audio to delete — in-memory only, gone on page reload.
 }
 
-async function deleteClips(_paths: string[]): Promise<void> {
+async function deleteClips(): Promise<void> {
   // No persisted clip files exist for the web-dev recorder.
 }
 
