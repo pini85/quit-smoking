@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BELIEF_META, beliefLabel, beliefPromise } from '@/data/beliefs';
+import { beliefLabel } from '@/data/beliefs';
 import { FI_BELIEF_TEXT } from '@/data/fi/beliefs';
 import { BRAIN_RESPONSES, brainResponseLines } from '@/data/brainResponses';
 import { FI_BRAIN_RESPONSES } from '@/data/fi/brainResponses';
@@ -11,9 +11,9 @@ import { ACHIEVEMENT_DEFINITIONS } from '@/domain/achievements/definitions';
 import { FI_ACHIEVEMENT_TEXT } from '@/data/fi/achievements';
 import { CATEGORY_META } from '@/components/health/categoryMeta';
 import { FI_CATEGORY_LABELS } from '@/data/fi/categoryMeta';
-import { INTERVENTIONS, TRUTH_CARDS, localizedIntervention } from '@/data/interventions';
+import { INTERVENTIONS, TRUTH_CARDS } from '@/data/interventions';
 import { FI_INTERVENTIONS, FI_TRUTH_CARDS } from '@/data/fi/interventions';
-import { TRIGGER_META, TRIGGER_ORDER } from '@/data/triggers';
+import { TRIGGER_META } from '@/data/triggers';
 import { FI_TRIGGER_TEXT } from '@/data/fi/triggers';
 import { BELIEFS, isBelief, isTrigger } from '@/domain/types';
 import { proofLine } from '@/domain/freedom/evidence';

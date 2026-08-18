@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import type { HealthMilestone } from '@/domain/types';
+import type { HealthMilestone, Locale } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
-import { TIME_BANDS, bandOf, currentBandId, groupByTimeBand } from '@/domain/milestones/engine';
+import { TIME_BANDS, bandOf, currentBandId, groupByTimeBand, timeBandLabel } from '@/domain/milestones/engine';
 import { hoursBetween } from '@/domain/time';
 import { humanizeEta } from '@/components/home/humanizeEta';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { filterEmerging } from './filterEmerging';
 import { TimelineRow } from './MilestoneRows';
@@ -24,10 +24,10 @@ export type TimelineViewProps = {
 
 /** Delegates to the engine's own band assignment rather than reimplementing
  *  the boundary walk, so this never drifts if TIME_BANDS changes. */
-function bandLabelOf(m: HealthMilestone): string {
+function bandLabelOf(m: HealthMilestone, locale: Locale, noFixedTiming: string): string {
   const id = bandOf(m);
-  if (id === null) return 'no fixed timing';
-  return TIME_BANDS.find((band) => band.id === id)?.label ?? 'no fixed timing';
+  if (id === null) return noFixedTiming;
+  return timeBandLabel(id, locale);
 }
 
 /**
@@ -49,6 +49,7 @@ function DiscoveriesCard({
   onOpenMilestone: (milestone: HealthMilestone) => void;
 }) {
   const { locale } = useLocale();
+  const m = useMessages();
   const [expanded, setExpanded] = useState(false);
   const pool = states.filter((s) => s.milestone.didYouKnow === true);
   const total = pool.length;
@@ -70,7 +71,7 @@ function DiscoveriesCard({
         className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
       >
         <span className="text-[15px] font-semibold text-ink">
-          💡 {found.length} of {total} found
+          {interpolate(m.health.discoveries.foundOf, { found: found.length, total })}
         </span>
         <span aria-hidden="true" className="text-ink-faint">
           {expanded ? '−' : '+'}
@@ -91,7 +92,7 @@ function DiscoveriesCard({
           ))}
           {locked.map((s) => (
             <p key={s.milestone.id} className="py-2 text-[13px] text-ink-muted">
-              ??? · {bandLabelOf(s.milestone)}
+              ??? · {bandLabelOf(s.milestone, locale, m.health.discoveries.noFixedTiming)}
             </p>
           ))}
         </div>
@@ -115,17 +116,24 @@ function TimeBandSection({
 }) {
   const [expanded, setExpanded] = useState(kind === 'current');
   const { locale } = useLocale();
+  const m = useMessages();
   const { band, states } = group;
 
   let summary: string | null = null;
   if (kind === 'past') {
     const achievedCount = states.filter((s) => s.status === 'achieved').length;
-    summary = `${achievedCount} change${achievedCount === 1 ? '' : 's'} complete ✓`;
+    summary = interpolate(
+      achievedCount === 1 ? m.health.timeBand.changesComplete : m.health.timeBand.changesCompletePlural,
+      { count: achievedCount }
+    );
   } else if (kind === 'future') {
     const idx = TIME_BANDS.findIndex((b) => b.id === band.id);
     const startHours = idx <= 0 ? 0 : TIME_BANDS[idx - 1].untilHours;
     const startsInMs = Math.max(0, (startHours - elapsedH) * HOUR_MS);
-    summary = `${states.length} ahead · starts ${humanizeEta(startsInMs, locale)}`;
+    summary = interpolate(m.health.timeBand.aheadStarts, {
+      count: states.length,
+      eta: humanizeEta(startsInMs, locale),
+    });
   }
 
   // "You are here" sits right before the first item that isn't achieved yet
@@ -144,7 +152,7 @@ function TimeBandSection({
         aria-expanded={expanded}
         className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
       >
-        <span className="text-[15px] font-semibold text-ink">{band.label}</span>
+        <span className="text-[15px] font-semibold text-ink">{timeBandLabel(band.id, locale)}</span>
         {summary ? <span className="text-[12px] text-ink-faint">{summary}</span> : null}
       </button>
 
@@ -154,7 +162,7 @@ function TimeBandSection({
             <div key={state.milestone.id}>
               {kind === 'current' && index === markerAt ? (
                 <p className="py-2 text-center text-[12px] font-semibold uppercase tracking-[0.1em] text-primary">
-                  — you are here —
+                  {m.health.timeBand.youAreHere}
                 </p>
               ) : null}
               <TimelineRow state={state} onOpen={() => onOpenMilestone(state.milestone)} />
@@ -162,7 +170,7 @@ function TimeBandSection({
           ))}
           {kind === 'current' && markerAt === states.length ? (
             <p className="py-2 text-center text-[12px] font-semibold uppercase tracking-[0.1em] text-primary">
-              — you are here —
+              {m.health.timeBand.youAreHere}
             </p>
           ) : null}
         </div>

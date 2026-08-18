@@ -3,10 +3,10 @@
 import type { HealthMilestone } from '@/domain/types';
 import { milestoneState, type MilestoneStatus } from '@/domain/milestones/engine';
 import { hoursBetween } from '@/domain/time';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { Sheet } from '@/components/ui/Sheet';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
-import { CATEGORY_META } from './categoryMeta';
+import { CATEGORY_META, categoryLabel } from './categoryMeta';
 import { fmt, timingPhrase } from './timingPhrase';
 import { localizedMilestone } from '@/data/healthMilestones';
 
@@ -23,11 +23,11 @@ export type MilestoneSheetProps = {
   now: Date;
 };
 
-const STATUS_CHIP: Record<MilestoneStatus, { icon: string; label: string }> = {
-  achieved: { icon: '✓', label: 'Achieved' },
-  'happening-now': { icon: '●', label: 'Happening now' },
-  upcoming: { icon: '○', label: 'Upcoming' },
-  'no-timeline': { icon: '—', label: 'Always true' },
+const STATUS_ICON: Record<MilestoneStatus, string> = {
+  achieved: '✓',
+  'happening-now': '●',
+  upcoming: '○',
+  'no-timeline': '—',
 };
 
 /**
@@ -41,9 +41,16 @@ const STATUS_CHIP: Record<MilestoneStatus, { icon: string; label: string }> = {
  */
 export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneSheetProps) {
   const { locale } = useLocale();
+  const m = useMessages();
   const category = milestone ? CATEGORY_META[milestone.category] : null;
   const state = milestone ? milestoneState(milestone, quitAt, now) : null;
-  const chip = state ? STATUS_CHIP[state.status] : null;
+  const STATUS_LABEL: Record<MilestoneStatus, string> = {
+    achieved: m.health.statusChip.achieved,
+    'happening-now': m.health.statusChip.happeningNow,
+    upcoming: m.health.statusChip.upcoming,
+    'no-timeline': m.health.statusChip.alwaysTrue,
+  };
+  const chip = state ? { icon: STATUS_ICON[state.status], label: STATUS_LABEL[state.status] } : null;
   const elapsed = fmt(Math.max(0, hoursBetween(quitAt, now)), locale);
   const text = milestone ? localizedMilestone(milestone, locale) : null;
   // `noTimeline` phrases travel with the localized milestone text rather
@@ -59,7 +66,8 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
       {milestone && category && chip && text && localizedTiming ? (
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-            <span aria-hidden="true">{category.emoji}</span> {category.label}
+            <span aria-hidden="true">{category.emoji}</span>{' '}
+            {categoryLabel(milestone.category, locale)}
           </p>
 
           <p className="text-[15px] leading-relaxed text-ink-muted">
@@ -74,8 +82,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
             <EvidenceBadge level={milestone.evidenceLevel} className="self-start" />
             {milestone.evidenceLevel === 'emerging' ? (
               <p className="text-[13px] leading-relaxed text-ink-faint">
-                Early evidence — we&rsquo;re telling you because it&rsquo;s interesting, not
-                proven.
+                {m.health.milestoneCard.earlyEvidence}
               </p>
             ) : null}
           </div>
@@ -88,7 +95,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
 
           <div className="flex flex-col gap-3 border-t border-border pt-4">
             <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-              Why am I seeing this?
+              {m.health.whyAmISeeingThis}
             </p>
 
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-surface-raised px-2 py-0.5 text-[11px] font-medium text-ink-muted">
@@ -97,8 +104,10 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
             </span>
 
             <p className="text-[13px] leading-relaxed text-ink-muted">
-              Shown because you&rsquo;re {elapsed} in and this typically occurs{' '}
-              {timingPhrase(localizedTiming, locale)}.
+              {interpolate(m.health.shownBecause, {
+                elapsed,
+                phrase: timingPhrase(localizedTiming, locale),
+              })}
             </p>
 
             {milestone.sources.length > 0 ? (
@@ -113,7 +122,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
                   >
                     {source.label}
                     <span className="ml-2 text-[12px] text-ink-faint no-underline">
-                      opens online ↗
+                      {m.you.about.opensOnline}
                     </span>
                   </a>
                 ))}

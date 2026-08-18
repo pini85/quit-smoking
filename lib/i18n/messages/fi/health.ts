@@ -25,4 +25,22 @@ export const health = {
     earlyEvidence: 'Alustava näyttö — kerromme tästä, koska se on kiinnostavaa, ei todistettua.',
     progressLabel: 'Muutoksen eteneminen',
   },
+  statusChip: {
+    achieved: 'Saavutettu',
+    happeningNow: 'Tapahtuu juuri nyt',
+    upcoming: 'Tulossa',
+    alwaysTrue: 'Aina totta',
+  },
+  whyAmISeeingThis: 'Miksi näen tämän?',
+  shownBecause: 'Näytetään, koska olet {elapsed} sisällä ja tämä tapahtuu tyypillisesti {phrase}.',
+  discoveries: {
+    foundOf: '💡 {found}/{total} löydetty',
+    noFixedTiming: 'ei kiinteää aikataulua',
+  },
+  timeBand: {
+    changesComplete: '{count} muutos valmis ✓',
+    changesCompletePlural: '{count} muutosta valmiina ✓',
+    aheadStarts: '{count} edessä · alkaa {eta}',
+    youAreHere: '— olet tässä —',
+  },
 };

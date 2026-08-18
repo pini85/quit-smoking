@@ -25,4 +25,22 @@ export const health = {
     earlyEvidence: 'Early evidence — we’re telling you because it’s interesting, not proven.',
     progressLabel: 'Progress through this change',
   },
+  statusChip: {
+    achieved: 'Achieved',
+    happeningNow: 'Happening now',
+    upcoming: 'Upcoming',
+    alwaysTrue: 'Always true',
+  },
+  whyAmISeeingThis: 'Why am I seeing this?',
+  shownBecause: 'Shown because you’re {elapsed} in and this typically occurs {phrase}.',
+  discoveries: {
+    foundOf: '💡 {found} of {total} found',
+    noFixedTiming: 'no fixed timing',
+  },
+  timeBand: {
+    changesComplete: '{count} change complete ✓',
+    changesCompletePlural: '{count} changes complete ✓',
+    aheadStarts: '{count} ahead · starts {eta}',
+    youAreHere: '— you are here —',
+  },
 };

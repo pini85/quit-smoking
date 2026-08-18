@@ -10,8 +10,9 @@
  * callers supply the milestone list.
  */
 
-import type { HealthMilestone, MilestoneCategory } from '@/domain/types';
+import type { HealthMilestone, Locale, MilestoneCategory } from '@/domain/types';
 import { hoursBetween } from '@/domain/time';
+import { FI_TIME_BAND_LABELS } from '@/data/fi/timeBands';
 
 const HOUR_MS = 3_600_000;
 
@@ -260,6 +261,11 @@ export const TIME_BANDS = [
   { id: 'beyond-15-years', label: '15+ years', untilHours: Infinity },
 ] as const;
 export type TimeBandId = (typeof TIME_BANDS)[number]['id'];
+
+export function timeBandLabel(id: TimeBandId, locale: Locale = 'en'): string {
+  if (locale !== 'fi') return TIME_BANDS.find((b) => b.id === id)?.label ?? id;
+  return FI_TIME_BAND_LABELS[id];
+}
 
 /** By earliestHours; null for noTimeline. */
 export function bandOf(m: HealthMilestone): TimeBandId | null {
