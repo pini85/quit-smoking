@@ -455,6 +455,42 @@ describe('validateExportFile — craving beliefId (v2 field on an existing colle
   });
 });
 
+describe('validateExportFile — preferences locale', () => {
+  const prefs = {
+    id: 'singleton',
+    theme: 'system',
+    showEmergingEvidence: true,
+    updatedAt: '2026-01-01T08:00:00Z',
+  };
+
+  it('round-trips a fi locale instead of silently stripping it', () => {
+    const raw = validFile({
+      preferences: { ...prefs, locale: 'fi' },
+    } as unknown as Partial<ExportFileV2>);
+    const file = validateExportFile(raw);
+    expect(file.preferences?.locale).toBe('fi');
+  });
+
+  it('accepts an explicit en locale', () => {
+    const raw = validFile({
+      preferences: { ...prefs, locale: 'en' },
+    } as unknown as Partial<ExportFileV2>);
+    expect(() => validateExportFile(raw)).not.toThrow();
+  });
+
+  it('still accepts a legacy preferences row without a locale field', () => {
+    const file = validateExportFile(validFile({ preferences: prefs } as unknown as Partial<ExportFileV2>));
+    expect('locale' in (file.preferences ?? {})).toBe(false);
+  });
+
+  it('rejects an unsupported locale value', () => {
+    const raw = validFile({
+      preferences: { ...prefs, locale: 'sv' },
+    } as unknown as Partial<ExportFileV2>);
+    expect(() => validateExportFile(raw)).toThrow(ImportError);
+  });
+});
+
 describe('validateExportFile — a migrated v1-shaped file', () => {
   it('validates once MIGRATIONS[1] has supplied the two empty collections', () => {
     const migratedV1 = {

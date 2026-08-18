@@ -7,7 +7,7 @@
  */
 
 import * as z from 'zod/mini';
-import { TRIGGERS, OUTCOMES, BELIEFS } from '@/domain/types';
+import { TRIGGERS, OUTCOMES, BELIEFS, LOCALES } from '@/domain/types';
 import { ImportError } from '@/domain/export/migrate';
 import type { ExportFileV2 } from '@/domain/export/format';
 
@@ -113,6 +113,7 @@ const moneyEquivalentSchema = z.object({
 const preferencesSchema = z.object({
   id: z.literal('singleton'),
   theme: z.enum(['system', 'light', 'dark']),
+  locale: z.optional(z.enum(LOCALES)),
   moneyEquivalents: z.optional(z.array(moneyEquivalentSchema)),
   showEmergingEvidence: z.boolean(),
   dismissedInstallHint: z.optional(z.boolean()),

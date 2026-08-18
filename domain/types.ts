@@ -186,9 +186,20 @@ export interface MoneyEquivalent {
   unitPrice: number;
 }
 
+// UI languages the app can render. English is the default and the schema
+// locale: an absent `Preferences.locale` means 'en', so rows written before
+// this field existed keep their exact behavior.
+export const LOCALES = ['en', 'fi'] as const;
+export type Locale = (typeof LOCALES)[number];
+
+export function isLocale(x: unknown): x is Locale {
+  return typeof x === 'string' && (LOCALES as readonly string[]).includes(x);
+}
+
 export interface Preferences {
   id: 'singleton';
   theme: 'system' | 'light' | 'dark';
+  locale?: Locale; // absent = 'en'
   moneyEquivalents?: MoneyEquivalent[];
   showEmergingEvidence: boolean;
   dismissedInstallHint?: boolean;
