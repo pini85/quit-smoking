@@ -11,6 +11,7 @@ import { TriggersSection } from '@/components/progress/TriggersSection';
 import { TimeOfDaySection } from '@/components/progress/TimeOfDaySection';
 import { InsightsFeed } from '@/components/progress/InsightsFeed';
 import { HistoryList } from '@/components/progress/HistoryList';
+import { SleepSection } from '@/components/progress/SleepSection';
 import { useMessages } from '@/lib/i18n';
 
 function Skeleton() {
@@ -65,6 +66,7 @@ export default function ProgressPage() {
       <TimeOfDaySection sessions={sessions} />
       <InsightsFeed sessions={sessions} quitAt={quitAt} now={nowMinute} />
       <HistoryList sessions={sessions} now={nowMinute} />
+      <SleepSection sessions={data.sleepSessions} quitAt={quitAt} now={nowMinute} />
     </div>
   );
 }
