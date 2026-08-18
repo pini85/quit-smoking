@@ -166,8 +166,32 @@ class SnoreMonitorPlugin : Plugin() {
         // NOTE (controller ruling): when `current.phase == 'stopped'` — a
         // stale, unclaimed previous session — this deliberately PROCEEDS
         // rather than rejecting, overwriting SessionStore with the new
-        // recording. See `SessionStore.startRecording`'s doc for why the old
-        // session's files are left on disk rather than cleaned up here.
+        // recording.
+        //
+        // That overwrite is also the LAST moment the old session's audio is
+        // reachable at all: SessionStore holds exactly one session, and
+        // deleteSessionAudio only acts on the session the store currently
+        // matches, so once this write lands, the previous session's segments
+        // and features.bin can never be deleted through any API again. A full
+        // night of bedroom audio surviving as an unreachable orphan is not an
+        // acceptable outcome for a feature whose UI promises the recording is
+        // always deleted, so delete that directory here.
+        //
+        // Best-effort, and deliberately not fatal to the start: failing to
+        // clean up yesterday must never stop the user recording tonight.
+        // Skipped entirely while `processing` is held — an extraction or clip
+        // cut may still be reading those very files, and yanking them
+        // mid-decode would turn a clean failure into a corrupt one.
+        if (current.phase == SessionState.PHASE_STOPPED && !processing.get()) {
+            current.sessionId?.let { staleId ->
+                if (isSafeId(staleId)) {
+                    runCatching {
+                        RecordingService.sessionDirFor(context.filesDir, staleId).deleteRecursively()
+                    }
+                }
+            }
+        }
+
         val startedAt = System.currentTimeMillis()
         sessionStore.startRecording(sessionId, startedAt)
 

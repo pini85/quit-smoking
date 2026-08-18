@@ -48,12 +48,17 @@ class SessionStore(context: Context) {
      * NOTE (controller ruling): this is also the path taken when the
      * previous state was `phase == 'stopped'` (a stale, unclaimed session —
      * one whose `stopRecording()` result nobody ever claimed). Rather than
-     * rejecting, `startRecording` deliberately proceeds and overwrites the
-     * store with the new session. The old session's audio files are
-     * deliberately left on disk here: session recovery (a later task) marks
-     * that old row 'lost' once it sees native has no memory of it anymore,
-     * and `deleteSessionAudio` (also a later task) is what actually cleans
-     * its files up.
+     * rejecting, `SnoreMonitorPlugin.startRecording` deliberately proceeds
+     * and overwrites the store with the new session; recovery on the web
+     * side then marks that old row 'lost' once it sees native has no memory
+     * of it anymore.
+     *
+     * This method itself only rewrites state — it never touches files. The
+     * stale session's audio directory is deleted by
+     * `SnoreMonitorPlugin.startRecording` immediately BEFORE it calls this,
+     * because this overwrite is the point after which that directory becomes
+     * permanently unreachable (`deleteSessionAudio` only ever acts on the
+     * session the store currently matches). See that call site's comment.
      */
     fun startRecording(sessionId: String, startedAt: Long): SessionState = synchronized(LOCK) {
         val state = SessionStateCodec.startRecording(sessionId, startedAt)

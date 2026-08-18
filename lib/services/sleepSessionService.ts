@@ -65,6 +65,27 @@ export class SleepSessionService {
   constructor(private readonly deps: SleepSessionServiceDeps) {}
 
   /**
+   * Best-effort native audio deletion — every caller treats a rejection as
+   * non-fatal, and a rejection is genuinely expected in normal operation:
+   * `deleteSessionAudio` only knows about the ONE session native currently
+   * holds, so it answers `SESSION_NOT_FOUND` for any older night, and an
+   * imported row never had audio on this device to begin with.
+   *
+   * Non-fatal must not mean "skipped", though: a night's full recording is
+   * the most sensitive thing this app ever writes to disk, so every path that
+   * ends a night — analyzed, provably unanalyzable, or deleted by the user —
+   * goes through here rather than leaving the audio for some later pass.
+   */
+  private async tryDeleteRecording(sessionId: string, keepClips: boolean): Promise<void> {
+    try {
+      await this.deps.recorder.deleteRecording(sessionId, keepClips);
+    } catch {
+      // See this method's doc — expected for any session native has moved
+      // past. Leftover audio, if any, is retried by the next delete path.
+    }
+  }
+
+  /**
    * If native is already recording (e.g. a previous `startMonitoring` call,
    * or an in-progress night from before this service instance existed),
    * adopts that session instead of starting a second one — a double-start
@@ -162,12 +183,18 @@ export class SleepSessionService {
    * low-RMS frames and simply produces zero snore *events*), or native
    * reporting `SESSION_NOT_FOUND`.
    *
-   * Ordering is safety-critical: the 'analyzed' row (with its metrics) is
-   * persisted BEFORE `deleteRecording` is ever called, so a crash or thrown
-   * error between the two leaves the audio intact rather than losing a
-   * night's data. Any error thrown before that persist (e.g. detector
-   * failure) propagates and leaves the row in 'recorded' — the UI can
-   * offer a retry, which calls this method again over the same audio.
+   * Ordering is safety-critical: the terminal row — 'analyzed' with its
+   * metrics, or 'failed' for zero frames — is persisted BEFORE
+   * `deleteRecording` is ever called, so a crash or thrown error between the
+   * two leaves the audio intact rather than losing a night's data. Any error
+   * thrown before that persist (e.g. detector failure) propagates and leaves
+   * the row in 'recorded' — the UI can offer a retry, which calls this
+   * method again over the same audio.
+   *
+   * Both terminal paths DO delete: an 'analyzed' night's audio has served its
+   * purpose, and a zero-frames night's audio is provably unanalyzable. Only
+   * the `SESSION_NOT_FOUND` path skips deletion, because there is by
+   * definition nothing left to delete.
    */
   async analyzeSession(session: SleepSession, recordingDurationMs?: number): Promise<SleepSession> {
     let frames: FeatureFrame[];
@@ -187,11 +214,16 @@ export class SleepSessionService {
       // Nothing decoded at all — e.g. a corrupt or empty audio file. This
       // is NOT a "quiet night" (which still yields many frames, just no
       // qualifying snore events) and must never be reported as one: doing
-      // so would both fabricate a clean-night result and, worse, destroy
-      // the only copy of audio nobody has actually looked at yet. Persist
-      // 'failed' and return BEFORE any analysis or `deleteRecording` call.
+      // so would fabricate a clean-night result. Persist 'failed' FIRST
+      // (same ordering doctrine as the analyzed path below: the terminal row
+      // state is durable before any audio is touched), then delete the
+      // recording — this audio is provably unanalyzable, so keeping a full
+      // night of bedroom sound around on the chance a retry helps would be
+      // holding the most sensitive data this app writes for no benefit at
+      // all. `keepClips` is false because no clips were ever cut from it.
       const failed = markFailed(session, new Date(session.startedAt));
       await this.deps.store.updateSleepSession(failed);
+      await this.tryDeleteRecording(session.id, false);
       return failed;
     }
 
@@ -221,20 +253,24 @@ export class SleepSessionService {
         });
       } catch {
         // Clip extraction is a bonus, not core analysis — the night's
-        // metrics still persist without clips attached.
+        // metrics still persist without clips attached. `keepClips` below
+        // stays false in that case, which matters: a partially-written clips
+        // directory that no row references would otherwise survive
+        // `deleteRecording` as unreachable audio nothing can ever delete.
       }
     }
 
+    // `keepClips` is derived from what actually got ATTACHED, never from the
+    // preference alone. The preference says the user wants clips; only an
+    // attached `clipPath` proves a clip exists AND is referenced by the row
+    // that is about to be persisted. Anything else (preference off, cutClips
+    // threw, cutClips legitimately produced nothing) must delete the clips
+    // directory along with the segments, or it becomes an orphan.
+    const keepClips = events.some((event) => event.clipPath !== undefined);
+
     const analyzed = markAnalyzed(session, { ...analysis, events }, metrics);
     await this.deps.store.updateSleepSession(analyzed);
-
-    try {
-      await this.deps.recorder.deleteRecording(session.id, this.deps.getPreferences()?.keepSnoreClips === true);
-    } catch {
-      // Non-fatal by design: the analyzed row above is already the
-      // authoritative record of this night. Leftover audio on-device is
-      // harmless and a future recovery/maintenance pass can retry deletion.
-    }
+    await this.tryDeleteRecording(session.id, keepClips);
 
     return analyzed;
   }
@@ -336,7 +372,20 @@ export class SleepSessionService {
     return live !== null ? { live } : {};
   }
 
-  /** Deletes any clip files the row references (non-fatal on error), then the row itself. */
+  /**
+   * Deletes everything this night has on the device — its clip files, its
+   * full-night audio, then the row itself. Both native deletions are
+   * best-effort (see `tryDeleteRecording`); only the row removal is required
+   * to succeed.
+   *
+   * `deleteRecording` matters most for exactly the rows the UI can least
+   * afford to leave behind: a 'recording'/'recorded' night whose analysis
+   * never completed still has its whole overnight recording on disk, and
+   * this per-night delete is the only way a user can get rid of it. Clearing
+   * only the row would leave that audio unreachable — native's own handle on
+   * it is dropped the next time a recording starts — while the UI claims the
+   * full recording is always deleted.
+   */
   async deleteSession(id: string): Promise<void> {
     const session = this.deps.getSessions().find((s) => s.id === id);
     const clipPaths = clipPathsOf(session ? [session] : []);
@@ -347,18 +396,30 @@ export class SleepSessionService {
         // Non-fatal: dangling clip files are harmless; the row is the source of truth.
       }
     }
+    // keepClips: false — the user asked for this night to be gone, clips
+    // included (the explicit `deleteClips` above only covers paths the row
+    // still references).
+    await this.tryDeleteRecording(id, false);
     await this.deps.store.removeSleepSession(id);
   }
 
   /** Same as `deleteSession`, but for every stored night at once. */
   async deleteAllSessions(): Promise<void> {
-    const clipPaths = clipPathsOf(this.deps.getSessions());
+    const sessions = this.deps.getSessions();
+    const clipPaths = clipPathsOf(sessions);
     if (clipPaths.length > 0) {
       try {
         await this.deps.recorder.deleteClips(clipPaths);
       } catch {
         // Non-fatal, see `deleteSession`.
       }
+    }
+    // Every row, in sequence: at most one of them is the session native
+    // currently holds, but which one that is isn't knowable from here, and
+    // asking about a night native has moved past costs only a rejection that
+    // `tryDeleteRecording` swallows.
+    for (const session of sessions) {
+      await this.tryDeleteRecording(session.id, false);
     }
     await this.deps.store.clearSleepSessions();
   }

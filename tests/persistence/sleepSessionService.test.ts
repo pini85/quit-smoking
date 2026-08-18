@@ -251,7 +251,7 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
   });
 
-  it('zero feature frames mark the row "failed" (never a fabricated "analyzed" quiet night) and never call deleteRecording', async () => {
+  it('zero feature frames mark the row "failed" (never a fabricated "analyzed" quiet night)', async () => {
     const { service, recorder, store } = await makeHarness();
     const started = await service.startMonitoring(NOW);
     recorder.featuresBySession.set(started.id, []); // nothing decoded at all
@@ -260,9 +260,40 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
 
     expect(result?.state).toBe('failed');
     expect(result?.events).toBeUndefined();
-    expect(recorder.deleteRecording).not.toHaveBeenCalled();
     expect(store.getSnapshot().sleepSessions[0].state).toBe('failed');
   });
+
+  it('zero feature frames delete the (provably unanalyzable) audio, but only AFTER "failed" is persisted', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const started = await service.startMonitoring(NOW);
+    recorder.featuresBySession.set(started.id, []);
+
+    const order: string[] = [];
+    const originalUpdate = store.updateSleepSession.bind(store);
+    vi.spyOn(store, 'updateSleepSession').mockImplementation(async (s) => {
+      if (s.state === 'failed') order.push('persist-failed');
+      return originalUpdate(s);
+    });
+    recorder.deleteRecording.mockImplementation(async () => {
+      order.push('delete-recording');
+    });
+
+    await service.stopMonitoring(NOW);
+
+    expect(order).toEqual(['persist-failed', 'delete-recording']);
+    expect(recorder.deleteRecording).toHaveBeenCalledWith(started.id, false);
+  });
+
+  it('a failing deleteRecording after a zero-frames night is non-fatal — the "failed" row still stands', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const started = await service.startMonitoring(NOW);
+    recorder.featuresBySession.set(started.id, []);
+    recorder.deleteRecordingError = new Error('SESSION_NOT_FOUND');
+
+    await expect(service.stopMonitoring(NOW)).resolves.toMatchObject({ state: 'failed' });
+    expect(store.getSnapshot().sleepSessions[0].state).toBe('failed');
+  });
+
 
   it('a recording well under MIN_ANALYZABLE_MS still becomes "analyzed" with its real (short) duration stored', async () => {
     const { service, recorder, store } = await makeHarness();
@@ -342,7 +373,7 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
   });
 
-  it('SESSION_NOT_FOUND marks the row "failed"', async () => {
+  it('SESSION_NOT_FOUND marks the row "failed" and never calls deleteRecording (nothing is left to delete)', async () => {
     const { service, recorder, store } = await makeHarness();
     const started = await service.startMonitoring(NOW);
     recorder.getFeaturesError.set(started.id, sessionNotFoundError());
@@ -458,6 +489,77 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     // The very first event's onset is at 1000ms; padding would go negative
     // (1000 - 1500 = -500) and must clamp to 0.
     expect(clips[0].startMs).toBe(0);
+  });
+
+  it('a cutClips failure still analyzes the night, but deletes with keepClips=false so no orphan clips dir survives', async () => {
+    const harness = await makeHarness();
+    const { service, recorder, store } = harness;
+    harness.preferences = {
+      id: 'singleton',
+      theme: 'system',
+      showEmergingEvidence: true,
+      keepSnoreClips: true,
+      updatedAt: NOW.toISOString(),
+    };
+    const started = await service.startMonitoring(NOW);
+
+    const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
+    const frames = makeFrames({
+      hopMs: 100,
+      totalMs: 20_000,
+      silence: QUIET_SILENCE,
+      bursts: [
+        { startMs: 5000, durationMs: 1000, ...RHYTHMIC },
+        { startMs: 9000, durationMs: 1000, ...RHYTHMIC },
+        { startMs: 13000, durationMs: 1000, ...RHYTHMIC },
+      ],
+    });
+    recorder.featuresBySession.set(started.id, frames);
+    recorder.cutClips.mockRejectedValueOnce(new Error('EXTRACTION_FAILED'));
+
+    const result = await service.stopMonitoring(NOW);
+
+    expect(result?.state).toBe('analyzed');
+    expect(result?.events?.every((e) => e.clipPath === undefined)).toBe(true);
+    // keepClips must be FALSE despite the preference being on: no clip path
+    // was attached, so a partially-written clips directory would otherwise
+    // survive with nothing referencing (or able to delete) it.
+    expect(recorder.deleteRecording).toHaveBeenCalledWith(started.id, false);
+    expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
+  });
+
+  it('keepClips is false when cutClips succeeds but produces no clips at all', async () => {
+    const harness = await makeHarness();
+    const { service, recorder } = harness;
+    harness.preferences = {
+      id: 'singleton',
+      theme: 'system',
+      showEmergingEvidence: true,
+      keepSnoreClips: true,
+      updatedAt: NOW.toISOString(),
+    };
+    const started = await service.startMonitoring(NOW);
+
+    const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
+    recorder.featuresBySession.set(
+      started.id,
+      makeFrames({
+        hopMs: 100,
+        totalMs: 20_000,
+        silence: QUIET_SILENCE,
+        bursts: [
+          { startMs: 5000, durationMs: 1000, ...RHYTHMIC },
+          { startMs: 9000, durationMs: 1000, ...RHYTHMIC },
+          { startMs: 13000, durationMs: 1000, ...RHYTHMIC },
+        ],
+      })
+    );
+    recorder.cutClipsResult = []; // every range mapped out of bounds
+
+    await service.stopMonitoring(NOW);
+
+    expect(recorder.cutClips).toHaveBeenCalledTimes(1);
+    expect(recorder.deleteRecording).toHaveBeenCalledWith(started.id, false);
   });
 
   it('clamps the right-padding at the recording duration when an event ends near that boundary', async () => {
@@ -671,6 +773,40 @@ describe('SleepSessionService.deleteSession / deleteAllSessions', () => {
     expect(store.getSnapshot().sleepSessions).toEqual([]);
   });
 
+  it('deleteSession also deletes the native full-night audio, before removing the row', async () => {
+    // The row is the only handle on that audio: once it (and native's own
+    // single-session store) moves on, an un-analyzed night's whole recording
+    // would be unreachable — while the UI promises it is always deleted.
+    const { service, recorder, store } = await makeHarness();
+    const row = makeRow({ id: 'sess-unanalyzed', state: 'recorded', endedAt: toLocalIso(NOW) });
+    await store.addSleepSession(row);
+
+    const order: string[] = [];
+    recorder.deleteRecording.mockImplementation(async () => {
+      order.push('delete-recording');
+    });
+    const originalRemove = store.removeSleepSession.bind(store);
+    vi.spyOn(store, 'removeSleepSession').mockImplementation(async (id) => {
+      order.push('remove-row');
+      return originalRemove(id);
+    });
+
+    await service.deleteSession('sess-unanalyzed');
+
+    expect(order).toEqual(['delete-recording', 'remove-row']);
+    expect(recorder.deleteRecording).toHaveBeenCalledWith('sess-unanalyzed', false);
+    expect(store.getSnapshot().sleepSessions).toEqual([]);
+  });
+
+  it('deleteSession still removes the row when the native audio delete rejects', async () => {
+    const { service, recorder, store } = await makeHarness();
+    await store.addSleepSession(makeRow({ id: 'sess-3', state: 'recorded' }));
+    recorder.deleteRecordingError = sessionNotFoundError();
+
+    await expect(service.deleteSession('sess-3')).resolves.toBeUndefined();
+    expect(store.getSnapshot().sleepSessions).toEqual([]);
+  });
+
   it('deleteSession with no clip paths skips deleteClips entirely', async () => {
     const { service, recorder, store } = await makeHarness();
     const row = makeRow({ id: 'sess-2', state: 'recording' });
@@ -700,6 +836,20 @@ describe('SleepSessionService.deleteSession / deleteAllSessions', () => {
     await service.deleteAllSessions();
 
     expect(recorder.deleteClips).toHaveBeenCalledWith(['/clips/a.m4a', '/clips/b.m4a']);
+    expect(store.getSnapshot().sleepSessions).toEqual([]);
+  });
+
+  it('deleteAllSessions asks native to delete every night’s audio too, then clears the table', async () => {
+    const { service, recorder, store } = await makeHarness();
+    await store.addSleepSession(makeRow({ id: 'a', state: 'analyzed' }));
+    await store.addSleepSession(makeRow({ id: 'b', state: 'recorded' }));
+
+    await service.deleteAllSessions();
+
+    expect(recorder.deleteRecording.mock.calls).toEqual([
+      ['a', false],
+      ['b', false],
+    ]);
     expect(store.getSnapshot().sleepSessions).toEqual([]);
   });
 });
