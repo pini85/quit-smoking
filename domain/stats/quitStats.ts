@@ -8,7 +8,7 @@
  * functions include them instead.
  */
 
-import type { CravingSession, Duration, MoneyEquivalent, QuitProfile } from '@/domain/types';
+import type { CravingSession, Duration, Locale, MoneyEquivalent, QuitProfile } from '@/domain/types';
 import { durationBetween, hoursBetween } from '@/domain/time';
 
 function round1(n: number): number {
@@ -136,3 +136,19 @@ export const RECOVERY_STAGE_LABELS: Record<RecoveryStage, string> = {
   established: 'Established',
   free: 'Free',
 };
+
+// Machine-translated, pending native-speaker review — see
+// docs/i18n-finnish-review.md.
+const RECOVERY_STAGE_LABELS_FI: Record<RecoveryStage, string> = {
+  'first-hours': 'Ensimmäiset tunnit',
+  'first-days': 'Ensimmäiset päivät',
+  'withdrawal-peak': 'Vieroitusoireiden huippu',
+  'early-recovery': 'Varhainen toipuminen',
+  consolidation: 'Vakiintumisvaihe',
+  established: 'Vakiintunut',
+  free: 'Vapaa',
+};
+
+export function recoveryStageLabel(stage: RecoveryStage, locale: Locale = 'en'): string {
+  return locale === 'fi' ? RECOVERY_STAGE_LABELS_FI[stage] : RECOVERY_STAGE_LABELS[stage];
+}

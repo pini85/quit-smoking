@@ -9,6 +9,7 @@ import { proofLine } from '@/domain/freedom/evidence';
 import { perTriggerStats } from '@/domain/stats/cravingStats';
 import { daysSinceEpoch } from '@/domain/time';
 import { useAppData } from '@/lib/hooks/useAppData';
+import { useLocale } from '@/lib/i18n';
 import { toLocalIso } from '@/lib/utils/iso';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
@@ -57,6 +58,7 @@ export const UNNAMED_RESPONSE = [
  */
 export function BrainFlow() {
   const { data, store } = useAppData();
+  const { locale } = useLocale();
   const router = useRouter();
 
   const [phase, setPhase] = useState<Phase>('promise');
@@ -122,7 +124,7 @@ export function BrainFlow() {
   // arrive. Below the gate the response line alone is the whole answer.
   const proof =
     belief !== null && response?.proofKind === 'trigger-history'
-      ? proofLine(cravings, belief)
+      ? proofLine(cravings, belief, locale)
       : null;
   const proofText = proof?.grounded === true ? proof.text : undefined;
 

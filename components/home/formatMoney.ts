@@ -1,13 +1,17 @@
+import type { Locale } from '@/domain/types';
+import { numberFmt } from '@/lib/i18n/fmt';
+
 /**
- * Currency formatting in the device locale. `Intl.NumberFormat` throws a
- * `RangeError` on a currency code it doesn't recognise, and a profile is
- * user-supplied data that outlives any list we ship — so a bad code degrades
- * to "12.34 XYZ" instead of blanking the whole screen.
+ * Currency formatting in the app locale ('en' follows the device, exactly
+ * the pre-i18n behavior). `Intl.NumberFormat` throws a `RangeError` on a
+ * currency code it doesn't recognise, and a profile is user-supplied data
+ * that outlives any list we ship — so a bad code degrades to "12.34 XYZ"
+ * instead of blanking the whole screen.
  */
-export function formatMoney(amount: number, currency: string): string {
+export function formatMoney(amount: number, currency: string, locale: Locale = 'en'): string {
   const safe = Number.isFinite(amount) ? amount : 0;
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(safe);
+    return numberFmt(locale, { style: 'currency', currency }).format(safe);
   } catch {
     return `${safe.toFixed(2)} ${currency}`;
   }

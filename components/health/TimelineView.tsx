@@ -6,6 +6,7 @@ import type { MilestoneState } from '@/domain/milestones/engine';
 import { TIME_BANDS, bandOf, currentBandId, groupByTimeBand } from '@/domain/milestones/engine';
 import { hoursBetween } from '@/domain/time';
 import { humanizeEta } from '@/components/home/humanizeEta';
+import { useLocale } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { filterEmerging } from './filterEmerging';
 import { TimelineRow } from './MilestoneRows';
@@ -111,6 +112,7 @@ function TimeBandSection({
   onOpenMilestone: (milestone: HealthMilestone) => void;
 }) {
   const [expanded, setExpanded] = useState(kind === 'current');
+  const { locale } = useLocale();
   const { band, states } = group;
 
   let summary: string | null = null;
@@ -121,7 +123,7 @@ function TimeBandSection({
     const idx = TIME_BANDS.findIndex((b) => b.id === band.id);
     const startHours = idx <= 0 ? 0 : TIME_BANDS[idx - 1].untilHours;
     const startsInMs = Math.max(0, (startHours - elapsedH) * HOUR_MS);
-    summary = `${states.length} ahead · starts ${humanizeEta(startsInMs)}`;
+    summary = `${states.length} ahead · starts ${humanizeEta(startsInMs, locale)}`;
   }
 
   // "You are here" sits right before the first item that isn't achieved yet

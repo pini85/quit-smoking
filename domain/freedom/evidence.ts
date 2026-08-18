@@ -15,12 +15,15 @@
  * word, regardless of how close the user is to the threshold.
  */
 
-import type { Belief, CravingSession, Trigger } from '@/domain/types';
+import type { Belief, CravingSession, Locale, Trigger } from '@/domain/types';
 import { alreadyProved, cravingCounts } from '@/domain/stats/cravingStats';
 import { BELIEF_META } from '@/data/beliefs';
-import { TRIGGER_META } from '@/data/triggers';
+import { triggerInSentence } from '@/data/triggers';
 
-const FALLBACK_TEXT = "We're still learning how this one shows up for you.";
+const FALLBACK_TEXT: Record<Locale, string> = {
+  en: "We're still learning how this one shows up for you.",
+  fi: 'Opettelemme vielä, miten tämä näyttäytyy sinulla.',
+};
 
 /** Thin wrapper over `alreadyProved` — the >= 3 RESOLVED gate for a trigger. */
 export function triggerProof(
@@ -56,25 +59,32 @@ export function beliefEncounters(
  */
 export function proofLine(
   sessions: CravingSession[],
-  beliefId: Belief
+  beliefId: Belief,
+  locale: Locale = 'en'
 ): { text: string; grounded: boolean } {
   const encounters = beliefEncounters(sessions, beliefId);
   if (encounters.total >= 3) {
     return {
       grounded: true,
-      text: `You've been here ${encounters.total} times. ${encounters.passedWithoutSmoking} passed without smoking.`,
+      text:
+        locale === 'fi'
+          ? `Olet ollut tässä ${encounters.total} kertaa. ${encounters.passedWithoutSmoking} meni ohi ilman tupakkaa.`
+          : `You've been here ${encounters.total} times. ${encounters.passedWithoutSmoking} passed without smoking.`,
     };
   }
 
   for (const trigger of BELIEF_META[beliefId].relatedTriggers) {
     const proof = triggerProof(sessions, trigger);
     if (proof === null) continue;
-    const label = TRIGGER_META[trigger].label.toLowerCase();
+    const fragment = triggerInSentence(trigger, locale);
     return {
       grounded: true,
-      text: `You've been in ${label} moments like this ${proof.total} times. ${proof.passed} passed without smoking.`,
+      text:
+        locale === 'fi'
+          ? `Olet ollut ${fragment} ${proof.total} kertaa. ${proof.passed} meni ohi ilman tupakkaa.`
+          : `You've been in ${fragment} moments like this ${proof.total} times. ${proof.passed} passed without smoking.`,
     };
   }
 
-  return { grounded: false, text: FALLBACK_TEXT };
+  return { grounded: false, text: FALLBACK_TEXT[locale] };
 }

@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { CravingSession } from '@/domain/types';
 import { generateInsights } from '@/domain/stats/insights';
+import { useLocale } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -30,14 +31,15 @@ const EMPTY_COPY =
  * everything eligible surfaces eventually.
  */
 export function InsightsFeed({ sessions, quitAt, now }: InsightsFeedProps) {
+  const { locale } = useLocale();
   const shown = useMemo(() => {
-    const full = generateInsights(sessions, quitAt, now, 99);
+    const full = generateInsights(sessions, quitAt, now, 99, locale);
     if (full.length === 0) return [];
     const daysSinceEpoch = Math.floor(now.getTime() / DAY_MS);
     const offset = daysSinceEpoch % full.length;
     const rotated = [...full.slice(offset), ...full.slice(0, offset)];
     return rotated.slice(0, 3);
-  }, [sessions, quitAt, now]);
+  }, [sessions, quitAt, now, locale]);
 
   return (
     <section className="flex flex-col gap-3">

@@ -6,7 +6,8 @@
  * (React components, hooks) are responsible for supplying "now".
  */
 
-import type { Duration } from './types';
+import type { Duration, Locale } from './types';
+import { formatCount, formatCompact } from './i18n/units';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
@@ -83,38 +84,40 @@ export function isoWeekKey(d: Date): string {
   return `${date.getUTCFullYear()}-W${String(weekNum).padStart(2, '0')}`;
 }
 
-function pluralize(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
 export type DurationStyle = 'compact';
 
 /**
- * Adaptive, locale-independent-English formatting of "time smoke-free".
- * See task brief for the exact band boundaries and rounding rules.
+ * Adaptive formatting of "time smoke-free" in the given locale (default
+ * English, byte-identical to the pre-i18n output). See task brief for the
+ * exact band boundaries and rounding rules.
  */
 export function formatSmokeFreeDuration(
   quitAt: Date,
-  now: Date
+  now: Date,
+  locale: Locale = 'en'
 ): { primary: string; secondary?: string } {
   const ms = Math.max(0, now.getTime() - quitAt.getTime());
 
   if (ms < HOUR_MS) {
     const minutes = Math.floor(ms / MINUTE_MS);
-    return { primary: pluralize(minutes, 'minute') };
+    return { primary: formatCount(minutes, 'minute', locale) };
   }
 
   if (ms < DAY_MS) {
     const hours = Math.floor(ms / HOUR_MS);
     const minutes = Math.floor((ms % HOUR_MS) / MINUTE_MS);
-    return { primary: `${hours}h ${minutes}m` };
+    return {
+      primary: `${formatCompact(hours, 'hour', locale)} ${formatCompact(minutes, 'minute', locale)}`,
+    };
   }
 
   if (ms < WEEK_MS) {
     const days = Math.floor(ms / DAY_MS);
     const hours = Math.floor((ms % DAY_MS) / HOUR_MS);
     const minutes = Math.floor((ms % HOUR_MS) / MINUTE_MS);
-    return { primary: `${days}d ${hours}h ${minutes}m` };
+    return {
+      primary: `${formatCompact(days, 'day', locale)} ${formatCompact(hours, 'hour', locale)} ${formatCompact(minutes, 'minute', locale)}`,
+    };
   }
 
   if (ms < EIGHT_WEEKS_MS) {
@@ -124,9 +127,12 @@ export function formatSmokeFreeDuration(
     const hoursRemainder = Math.floor((ms % DAY_MS) / HOUR_MS);
     const primary =
       remainderDays === 0
-        ? pluralize(weeks, 'week')
-        : `${pluralize(weeks, 'week')}, ${pluralize(remainderDays, 'day')}`;
-    return { primary, secondary: `${totalDays}d ${hoursRemainder}h` };
+        ? formatCount(weeks, 'week', locale)
+        : `${formatCount(weeks, 'week', locale)}, ${formatCount(remainderDays, 'day', locale)}`;
+    return {
+      primary,
+      secondary: `${formatCompact(totalDays, 'day', locale)} ${formatCompact(hoursRemainder, 'hour', locale)}`,
+    };
   }
 
   if (ms < YEAR_MS) {
@@ -136,8 +142,8 @@ export function formatSmokeFreeDuration(
     const weeks = Math.round(remainderDays / 7);
     const primary =
       weeks === 0
-        ? pluralize(months, 'month')
-        : `${pluralize(months, 'month')}, ${pluralize(weeks, 'week')}`;
+        ? formatCount(months, 'month', locale)
+        : `${formatCount(months, 'month', locale)}, ${formatCount(weeks, 'week', locale)}`;
     return { primary };
   }
 
@@ -154,8 +160,8 @@ export function formatSmokeFreeDuration(
   }
   const primary =
     months === 0
-      ? pluralize(years, 'year')
-      : `${pluralize(years, 'year')}, ${pluralize(months, 'month')}`;
+      ? formatCount(years, 'year', locale)
+      : `${formatCount(years, 'year', locale)}, ${formatCount(months, 'month', locale)}`;
   return { primary };
 }
 

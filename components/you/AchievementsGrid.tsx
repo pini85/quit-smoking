@@ -12,6 +12,8 @@ import { ACHIEVEMENT_DEFINITIONS } from '@/domain/achievements/definitions';
 import { progressToward, type AchievementContext } from '@/domain/achievements/engine';
 import { TRIGGER_META } from '@/data/triggers';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
+import { useLocale } from '@/lib/i18n';
+import { dateFmt } from '@/lib/i18n/fmt';
 import type { DataStore } from '@/lib/services/dataStore';
 import { Card } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
@@ -25,8 +27,6 @@ export type AchievementsGridProps = {
   now: Date;
 };
 
-const shortDateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'short' });
-const mediumDateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
 
 /**
  * Plain-language description of a LOCKED achievement's target — never a
@@ -64,6 +64,7 @@ function AchievementTile({
   ctx: AchievementContext;
   onOpen: () => void;
 }) {
+  const { locale } = useLocale();
   if (unlockedAt !== null) {
     return (
       <button
@@ -74,7 +75,9 @@ function AchievementTile({
         <span className="text-[13px] font-semibold leading-snug text-primary-strong">
           {def.title}
         </span>
-        <span className="text-[11px] text-ink-faint">{shortDateFmt.format(new Date(unlockedAt))}</span>
+        <span className="text-[11px] text-ink-faint">
+          {dateFmt(locale, { dateStyle: 'short' }).format(new Date(unlockedAt))}
+        </span>
       </button>
     );
   }
@@ -109,6 +112,7 @@ function AchievementTile({
  * for), so this is the catch-all that keeps the grid honest.
  */
 export function AchievementsGrid({ profile, cravings, unlocks, store, now }: AchievementsGridProps) {
+  const { locale } = useLocale();
   const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -156,7 +160,7 @@ export function AchievementsGrid({ profile, cravings, unlocks, store, now }: Ach
           <div className="flex flex-col gap-3 pb-2">
             <p className="text-[15px] leading-relaxed text-ink-muted">{openDef.fact}</p>
             <p className="text-[13px] text-ink-faint">
-              Unlocked {mediumDateFmt.format(new Date(openUnlockedAt))}
+              Unlocked {dateFmt(locale, { dateStyle: 'medium' }).format(new Date(openUnlockedAt))}
             </p>
           </div>
         ) : null}

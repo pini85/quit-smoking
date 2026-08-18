@@ -5,8 +5,9 @@ import type { HealthMilestone } from '@/domain/types';
 import { HEALTH_MILESTONES } from '@/data/healthMilestones';
 import { computeMilestoneStates, nextMilestone } from '@/domain/milestones/engine';
 import { formatDurationDigital, formatSmokeFreeDuration } from '@/domain/time';
-import { RECOVERY_STAGE_LABELS, recoveryStage } from '@/domain/stats/quitStats';
+import { recoveryStageLabel, recoveryStage } from '@/domain/stats/quitStats';
 import { useNow } from '@/lib/hooks/useNow';
+import { useLocale } from '@/lib/i18n';
 import { Ring } from '@/components/ui/Ring';
 import { humanizeEta } from './humanizeEta';
 
@@ -81,6 +82,7 @@ function digitalSizeClass(text: string): string {
  */
 export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
   const now = useNow(1000);
+  const { locale } = useLocale();
   const [precise, setPrecise] = useState(false);
 
   const quitAtMs = quitAt.getTime();
@@ -110,9 +112,9 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
   const progress = preQuit ? 1 : progressTowardNext(elapsedHours, nextHours);
 
   const stage = recoveryStage(quitAt, now);
-  const smokeFree = formatSmokeFreeDuration(streakStartAt, now);
+  const smokeFree = formatSmokeFreeDuration(streakStartAt, now, locale);
   const digital = formatDurationDigital(preQuit ? quitAtMs - nowMs : streakElapsedMs);
-  const sinceQuit = hasSlip ? formatSmokeFreeDuration(quitAt, now).primary : null;
+  const sinceQuit = hasSlip ? formatSmokeFreeDuration(quitAt, now, locale).primary : null;
 
   return (
     <section className="flex flex-col items-center gap-4 pt-2">
@@ -120,7 +122,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
         <span aria-hidden="true" className="text-primary">
           ●
         </span>
-        {preQuit ? 'Ready to start' : RECOVERY_STAGE_LABELS[stage]}
+        {preQuit ? 'Ready to start' : recoveryStageLabel(stage, locale)}
       </p>
 
       <button
@@ -191,7 +193,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
           onClick={() => onOpenMilestone(next.state.milestone)}
           className="min-h-11 max-w-[30ch] text-balance px-2 text-center text-[13px] leading-relaxed text-ink-muted"
         >
-          Next: {next.state.milestone.title} — {humanizeEta(next.etaMs)}
+          Next: {next.state.milestone.title} — {humanizeEta(next.etaMs, locale)}
         </button>
       ) : null}
     </section>

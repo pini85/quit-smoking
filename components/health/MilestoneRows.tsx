@@ -2,6 +2,7 @@ import type { MilestoneState, MilestoneStatus } from '@/domain/milestones/engine
 import { Card } from '@/components/ui/Card';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { humanizeEta } from '@/components/home/humanizeEta';
+import { useLocale } from '@/lib/i18n';
 import { CATEGORY_META } from './categoryMeta';
 
 /** Compact "arriving soon" card: category, title, and a vague ETA. */
@@ -12,6 +13,7 @@ export function CompactUpcomingCard({
   state: MilestoneState;
   onOpen: () => void;
 }) {
+  const { locale } = useLocale();
   const { milestone, startsInMs } = state;
   const category = CATEGORY_META[milestone.category];
 
@@ -21,7 +23,7 @@ export function CompactUpcomingCard({
         <span aria-hidden="true">{category.emoji}</span> {category.label}
       </p>
       <p className="text-[14px] font-medium leading-snug text-ink">{milestone.title}</p>
-      <p className="text-[12px] text-ink-faint">{humanizeEta(startsInMs ?? 0)}</p>
+      <p className="text-[12px] text-ink-faint">{humanizeEta(startsInMs ?? 0, locale)}</p>
     </Card>
   );
 }

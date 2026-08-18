@@ -3,6 +3,7 @@
 import type { HealthMilestone } from '@/domain/types';
 import { milestoneState, type MilestoneStatus } from '@/domain/milestones/engine';
 import { hoursBetween } from '@/domain/time';
+import { useLocale } from '@/lib/i18n';
 import { Sheet } from '@/components/ui/Sheet';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { CATEGORY_META } from './categoryMeta';
@@ -38,10 +39,11 @@ const STATUS_CHIP: Record<MilestoneStatus, { icon: string; label: string }> = {
  * timeline without any caller having to precompute a `MilestoneState`.
  */
 export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneSheetProps) {
+  const { locale } = useLocale();
   const category = milestone ? CATEGORY_META[milestone.category] : null;
   const state = milestone ? milestoneState(milestone, quitAt, now) : null;
   const chip = state ? STATUS_CHIP[state.status] : null;
-  const elapsed = fmt(Math.max(0, hoursBetween(quitAt, now)));
+  const elapsed = fmt(Math.max(0, hoursBetween(quitAt, now)), locale);
 
   return (
     <Sheet open={milestone !== null} onClose={onClose} title={milestone?.title}>
@@ -56,7 +58,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
           </p>
 
           <p className="text-[13px] italic leading-relaxed text-ink-faint">
-            {timingPhrase(milestone.timing)}
+            {timingPhrase(milestone.timing, locale)}
           </p>
 
           <div className="flex flex-col gap-2">
@@ -87,7 +89,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
 
             <p className="text-[13px] leading-relaxed text-ink-muted">
               Shown because you&rsquo;re {elapsed} in and this typically occurs{' '}
-              {timingPhrase(milestone.timing)}.
+              {timingPhrase(milestone.timing, locale)}.
             </p>
 
             {milestone.sources.length > 0 ? (

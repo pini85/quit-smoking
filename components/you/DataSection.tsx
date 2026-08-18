@@ -10,6 +10,8 @@ import { getAppRepositories } from '@/lib/services/appDb';
 import type { DataStore } from '@/lib/services/dataStore';
 import { toLocalIso } from '@/lib/utils/iso';
 import { defaultPreferences } from '@/lib/utils/preferences';
+import { useLocale } from '@/lib/i18n';
+import { dateFmt } from '@/lib/i18n/fmt';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
@@ -23,7 +25,6 @@ export type DataSectionProps = {
 };
 
 const THIRTY_DAYS_MS = 30 * 86_400_000;
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 /**
  * Downloads a fresh export and records `lastExportAt`. Exported so
@@ -80,6 +81,7 @@ type PendingImport = { file: ExportFileV2; summary: MergeSummary };
  * replace), touches the database.
  */
 export function DataSection({ preferences, cravings, store, now }: DataSectionProps) {
+  const { locale } = useLocale();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [exporting, setExporting] = useState(false);
   const [pending, setPending] = useState<PendingImport | null>(null);
@@ -164,7 +166,7 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
         </p>
         {lastExportAt ? (
           <p className="mt-1 text-[12px] text-ink-faint">
-            Last export: {dateTimeFmt.format(new Date(lastExportAt))}
+            Last export: {dateFmt(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastExportAt))}
           </p>
         ) : null}
         {staleExport ? (

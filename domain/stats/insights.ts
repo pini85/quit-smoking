@@ -8,9 +8,9 @@
  * recomputing it.
  */
 
-import type { CravingSession, Trigger } from '@/domain/types';
+import type { CravingSession, Locale, Trigger } from '@/domain/types';
 import { isoWeekKey } from '@/domain/time';
-import { TRIGGER_META } from '@/data/triggers';
+import { triggerLabel, triggerInSentence } from '@/data/triggers';
 import {
   hardestWindow,
   perTriggerStats,
@@ -40,11 +40,21 @@ export interface Insight {
 export interface InsightRule {
   kind: InsightKind;
   minSessions: number;
-  compute(sessions: CravingSession[], quitAt: Date, now: Date): Insight | null;
+  compute(
+    sessions: CravingSession[],
+    quitAt: Date,
+    now: Date,
+    locale?: Locale
+  ): Insight | null;
 }
 
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
+}
+
+/** Finnish writes decimals with a comma ("6,5"), never a point. */
+function fiDecimal(formatted: string): string {
+  return formatted.replace('.', ',');
 }
 
 /** Per-trigger stats as an array, for argmax scans below. */
@@ -73,7 +83,7 @@ function triggerEntries(
 const peakHoursRule: InsightRule = {
   kind: 'peak-hours',
   minSessions: 10,
-  compute(sessions) {
+  compute(sessions, _quitAt, _now, locale = 'en') {
     const total = sessions.length;
     if (total < 10) return null;
     const window = hardestWindow(sessions);
@@ -81,9 +91,13 @@ const peakHoursRule: InsightRule = {
     // 40% threshold via cross-multiplication to avoid float error: count/total >= 0.4 <=> count*5 >= total*2
     if (window.count * 5 < total * 2) return null;
     const start = pad2(window.startHour);
+    const end = pad2(window.endHour);
     const text =
-      `Your cravings cluster between ${start}:00–${pad2(window.endHour)}:00. ` +
-      `A ${start}:00 craving is one you saw coming.`;
+      locale === 'fi'
+        ? `Mielitekosi keskittyvät kello ${start}:00–${end}:00 välille. ` +
+          `Kello ${start}:00 mieliteko on sellainen, jonka näit tulevan.`
+        : `Your cravings cluster between ${start}:00–${end}:00. ` +
+          `A ${start}:00 craving is one you saw coming.`;
     return { id: 'peak-hours', kind: 'peak-hours', text, priority: 1 };
   },
 };
@@ -98,7 +112,7 @@ const peakHoursRule: InsightRule = {
 const triggerShareRule: InsightRule = {
   kind: 'trigger-share',
   minSessions: 8,
-  compute(sessions) {
+  compute(sessions, _quitAt, _now, locale = 'en') {
     const entries = triggerEntries(sessions);
     if (entries.length === 0) return null;
     const totalWithTrigger = entries.reduce((sum, [, v]) => sum + v.total, 0);
@@ -124,8 +138,11 @@ const triggerShareRule: InsightRule = {
     // 25% threshold via cross-multiplication: total/totalWithTrigger >= 0.25 <=> total*4 >= totalWithTrigger
     if (bestStats.total * 4 < totalWithTrigger) return null;
     const pct = Math.round((bestStats.total / totalWithTrigger) * 100);
-    const label = TRIGGER_META[bestTrigger].label;
-    const text = `${label} is linked to ${pct}% of your recorded cravings.`;
+    const label = triggerLabel(bestTrigger, locale);
+    const text =
+      locale === 'fi'
+        ? `${label} liittyy ${pct} prosenttiin kirjaamistasi mieliteoista.`
+        : `${label} is linked to ${pct}% of your recorded cravings.`;
     return { id: `trigger-share:${bestTrigger}`, kind: 'trigger-share', text, priority: 2 };
   },
 };
@@ -143,7 +160,7 @@ const triggerShareRule: InsightRule = {
 const intensityDeclineRule: InsightRule = {
   kind: 'intensity-decline',
   minSessions: 10,
-  compute(sessions) {
+  compute(sessions, _quitAt, _now, locale = 'en') {
     const byWeek = new Map<string, CravingSession[]>();
     for (const s of sessions) {
       const key = isoWeekKey(new Date(s.startedAt));
@@ -164,7 +181,10 @@ const intensityDeclineRule: InsightRule = {
     const deltaTenths = Math.round(firstAvg * 10) - Math.round(latestAvg * 10);
     if (deltaTenths < 10) return null;
 
-    const text = `Your average craving intensity dropped from ${firstAvg.toFixed(1)} in week one to ${latestAvg.toFixed(1)} this week.`;
+    const text =
+      locale === 'fi'
+        ? `Mielitekojesi keskimääräinen voimakkuus on laskenut: ensimmäisellä viikolla ${fiDecimal(firstAvg.toFixed(1))}, tällä viikolla ${fiDecimal(latestAvg.toFixed(1))}.`
+        : `Your average craving intensity dropped from ${firstAvg.toFixed(1)} in week one to ${latestAvg.toFixed(1)} this week.`;
     return { id: 'intensity-decline', kind: 'intensity-decline', text, priority: 3 };
   },
 };
@@ -187,7 +207,7 @@ const intensityDeclineRule: InsightRule = {
 const frequencyDeclineRule: InsightRule = {
   kind: 'frequency-decline',
   minSessions: 1,
-  compute(sessions, quitAt, now) {
+  compute(sessions, quitAt, now, locale = 'en') {
     // Reuse weeklyCounts's zero-filled per-ISO-week buckets (quitAt's week
     // through now's week inclusive) and drop the last entry — the week
     // containing `now` — since it is necessarily partial/still-elapsing.
@@ -207,7 +227,10 @@ const frequencyDeclineRule: InsightRule = {
 
     if (!monotonicNonIncreasing && !percentDeclineOk) return null;
 
-    const text = `Cravings are becoming less frequent: ${first}/week at the start, ${latest}/week now.`;
+    const text =
+      locale === 'fi'
+        ? `Mieliteot harvenevat: alussa ${first}/viikko, nyt ${latest}/viikko.`
+        : `Cravings are becoming less frequent: ${first}/week at the start, ${latest}/week now.`;
     return { id: 'frequency-decline', kind: 'frequency-decline', text, priority: 4 };
   },
 };
@@ -221,7 +244,7 @@ const frequencyDeclineRule: InsightRule = {
 const triggerVictoryRule: InsightRule = {
   kind: 'trigger-victory',
   minSessions: 5,
-  compute(sessions) {
+  compute(sessions, _quitAt, _now, locale = 'en') {
     const entries = triggerEntries(sessions);
     if (entries.length === 0) return null;
 
@@ -239,8 +262,10 @@ const triggerVictoryRule: InsightRule = {
 
     const [bestTrigger, bestStats] = best;
     if (bestStats.passed < 5) return null;
-    const label = TRIGGER_META[bestTrigger].label.toLowerCase();
-    const text = `You've passed ${bestStats.passed} ${label} cravings. That loop is losing.`;
+    const text =
+      locale === 'fi'
+        ? `${bestStats.passed} mielitekoa ${triggerInSentence(bestTrigger, 'fi')} on jo mennyt ohi. Se kierre on hiipumassa.`
+        : `You've passed ${bestStats.passed} ${triggerInSentence(bestTrigger)} cravings. That loop is losing.`;
     return { id: `trigger-victory:${bestTrigger}`, kind: 'trigger-victory', text, priority: 5 };
   },
 };
@@ -254,13 +279,16 @@ const triggerVictoryRule: InsightRule = {
 const avgDurationRule: InsightRule = {
   kind: 'avg-duration',
   minSessions: 5,
-  compute(sessions) {
+  compute(sessions, _quitAt, _now, locale = 'en') {
     const eligibleCount = resolvedSessions(sessions).filter((s) => s.endedAt !== undefined).length;
     if (eligibleCount < 5) return null;
     const avgSec = avgDurationSec(sessions);
     if (avgSec === null) return null;
     const minutes = Math.max(1, Math.round(avgSec / 60));
-    const text = `Your recorded cravings last about ${minutes} minutes on average — and you outlast them.`;
+    const text =
+      locale === 'fi'
+        ? `Kirjaamasi mieliteot kestävät keskimäärin noin ${minutes} minuuttia — ja sinä kestät pidempään.`
+        : `Your recorded cravings last about ${minutes} minutes on average — and you outlast them.`;
     return { id: 'avg-duration', kind: 'avg-duration', text, priority: 6 };
   },
 };
@@ -274,14 +302,17 @@ const avgDurationRule: InsightRule = {
 const cravingFreeRecordRule: InsightRule = {
   kind: 'craving-free-record',
   minSessions: 5,
-  compute(sessions, quitAt, now) {
+  compute(sessions, quitAt, now, locale = 'en') {
     if (sessions.length < 5) return null;
     const gapMs = longestCravingFreeGapMs(sessions, quitAt, now);
     const FORTY_EIGHT_HOURS_MS = 48 * 3_600_000;
     if (gapMs < FORTY_EIGHT_HOURS_MS) return null;
     const days = gapMs / 86_400_000;
     const formatted = days >= 3 ? `${Math.round(days)}` : days.toFixed(1);
-    const text = `Your longest craving-free stretch so far: ${formatted} days.`;
+    const text =
+      locale === 'fi'
+        ? `Pisin mieliteoton jaksosi tähän mennessä: ${fiDecimal(formatted)} päivää.`
+        : `Your longest craving-free stretch so far: ${formatted} days.`;
     return { id: 'craving-free-record', kind: 'craving-free-record', text, priority: 7 };
   },
 };
@@ -307,14 +338,15 @@ export function generateInsights(
   sessions: CravingSession[],
   quitAt: Date,
   now: Date,
-  limit = 3
+  limit = 3,
+  locale: Locale = 'en'
 ): Insight[] {
   const seenKinds = new Set<InsightKind>();
   const results: Insight[] = [];
   for (const rule of INSIGHT_RULES) {
     if (seenKinds.has(rule.kind)) continue;
     if (sessions.length < rule.minSessions) continue;
-    const insight = rule.compute(sessions, quitAt, now);
+    const insight = rule.compute(sessions, quitAt, now, locale);
     if (insight === null) continue;
     seenKinds.add(rule.kind);
     results.push(insight);

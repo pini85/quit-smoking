@@ -1,7 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { CravingOutcome, CravingSession } from '@/domain/types';
+import type { CravingOutcome, CravingSession, Locale } from '@/domain/types';
+import { dateFmt } from '@/lib/i18n/fmt';
+import { useLocale } from '@/lib/i18n';
 import { BELIEF_META } from '@/data/beliefs';
 import { TRIGGER_META } from '@/data/triggers';
 import { INTERVENTIONS } from '@/data/interventions';
@@ -16,29 +18,25 @@ export type HistoryListProps = {
 
 const VISIBLE_COUNT = 10;
 
-/** Device-local 24-hour clock, e.g. '09:05' — matches the brief's `{HH:mm}`. */
-function hhmm(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+/** Locale-local 24-hour clock, e.g. '09:05' — matches the brief's `{HH:mm}`. */
+function hhmm(iso: string, locale: Locale): string {
+  return dateFmt(locale, { hour: '2-digit', minute: '2-digit', hour12: false }).format(
+    new Date(iso)
+  );
 }
 
 /** Short date, year omitted when it's the current year. */
-function shortDate(iso: string, now: Date): string {
+function shortDate(iso: string, now: Date, locale: Locale): string {
   const d = new Date(iso);
   const opts: Intl.DateTimeFormatOptions =
     d.getFullYear() === now.getFullYear()
       ? { month: 'short', day: 'numeric' }
       : { month: 'short', day: 'numeric', year: 'numeric' };
-  return new Intl.DateTimeFormat(undefined, opts).format(d);
+  return dateFmt(locale, opts).format(d);
 }
 
-function fullDateTime(iso: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(iso)
-  );
+function fullDateTime(iso: string, locale: Locale): string {
+  return dateFmt(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
 }
 
 /**
@@ -76,6 +74,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
  * already teaches the empty case.
  */
 export function HistoryList({ sessions, now }: HistoryListProps) {
+  const { locale } = useLocale();
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<CravingSession | null>(null);
 
@@ -102,7 +101,7 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
           return (
             <Card key={session.id} onClick={() => setSelected(session)} className="!p-4">
               <p className="text-[13px] leading-relaxed tabular-nums text-ink">
-                {hhmm(session.startedAt)} · {shortDate(session.startedAt, now)} · {trigger} ·{' '}
+                {hhmm(session.startedAt, locale)} · {shortDate(session.startedAt, now, locale)} · {trigger} ·{' '}
                 {session.initialIntensity} → {session.finalIntensity ?? '—'} ·{' '}
                 <span className={outcome.muted ? 'text-ink-faint' : undefined}>
                   {outcome.text}
@@ -126,7 +125,7 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
       <Sheet open={selected !== null} onClose={() => setSelected(null)} title="Craving detail">
         {selected ? (
           <div className="flex flex-col gap-4 pb-2">
-            <DetailRow label="Started" value={fullDateTime(selected.startedAt)} />
+            <DetailRow label="Started" value={fullDateTime(selected.startedAt, locale)} />
             {selected.endedAt ? (
               <DetailRow
                 label="Duration"

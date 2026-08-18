@@ -5,6 +5,8 @@ import type { QuitProfile } from '@/domain/types';
 import type { DataStore } from '@/lib/services/dataStore';
 import { toLocalIso } from '@/lib/utils/iso';
 import { formatMoney } from '@/components/home/formatMoney';
+import { useLocale } from '@/lib/i18n';
+import { dateFmt } from '@/lib/i18n/fmt';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
@@ -17,7 +19,6 @@ export type ProfileSectionProps = {
   store: DataStore;
 };
 
-const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 function toDatetimeLocalValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -167,6 +168,7 @@ function ProfileEditForm({
 }
 
 export function ProfileSection({ profile, store }: ProfileSectionProps) {
+  const { locale } = useLocale();
   const [editing, setEditing] = useState(false);
 
   return (
@@ -179,10 +181,15 @@ export function ProfileSection({ profile, store }: ProfileSectionProps) {
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <Row label="Quit moment" value={dateTimeFmt.format(new Date(profile.quitAt))} />
+        <Row
+          label="Quit moment"
+          value={dateFmt(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+            new Date(profile.quitAt)
+          )}
+        />
         <Row label="Cigarettes / day" value={String(profile.cigarettesPerDay)} />
         <Row label="Cigarettes / pack" value={String(profile.cigarettesPerPack)} />
-        <Row label="Price / pack" value={formatMoney(profile.packPrice, profile.currency)} />
+        <Row label="Price / pack" value={formatMoney(profile.packPrice, profile.currency, locale)} />
       </div>
 
       <Sheet open={editing} onClose={() => setEditing(false)} title="Edit profile">
