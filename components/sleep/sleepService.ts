@@ -1,0 +1,125 @@
+/**
+ * Non-component glue for the /sleep screen: the single construction point
+ * for a `SleepSessionService` wired to a live `DataStore` snapshot, plus a
+ * handful of small presentational/orchestration helpers shared by more than
+ * one `components/sleep/*` file. No detection/analysis logic lives here —
+ * that stays in `domain/snore/*` and `lib/services/sleepSessionService.ts`,
+ * which this file only ever consumes.
+ */
+import type { Locale, SleepSession } from '@/domain/types';
+import type { SnoreComparison } from '@/domain/snore/trends';
+import { formatCompact } from '@/domain/i18n/units';
+import type { DataStore } from '@/lib/services/dataStore';
+import type { SleepRecorder } from '@/lib/recorder/types';
+import { SleepSessionService } from '@/lib/services/sleepSessionService';
+import { interpolate, type Messages } from '@/lib/i18n';
+
+/**
+ * Builds the `SleepSessionService` the whole /sleep screen shares. Deps read
+ * live from the `DataStore` snapshot (never captured once) so the service
+ * always sees current preferences/sessions/quit date without ever needing
+ * to be rebuilt.
+ */
+export function buildSleepSessionService(recorder: SleepRecorder, store: DataStore): SleepSessionService {
+  return new SleepSessionService({
+    recorder,
+    store,
+    getSessions: () => store.getSnapshot().sleepSessions,
+    getPreferences: () => store.getSnapshot().preferences ?? undefined,
+    getQuitAt: () => {
+      const profile = store.getSnapshot().profile;
+      return profile ? new Date(profile.quitAt) : null;
+    },
+  });
+}
+
+/** 'Xh Ym' (locale-aware units), omitting the hour part entirely below 1 hour. */
+export function formatSleepDuration(ms: number, locale: Locale): string {
+  const totalMinutes = Math.round(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return formatCompact(minutes, 'minute', locale);
+  return `${formatCompact(hours, 'hour', locale)} ${formatCompact(minutes, 'minute', locale)}`;
+}
+
+/**
+ * Compact '↓/↑/≈ N% vs. your baseline' line for `MorningResults` and the
+ * progress entry card — deliberately vague about WHICH baseline (pre-quit
+ * or first-nights) so it never implies more than "your own past nights".
+ */
+export function formatVsBaselineCompact(deltaPercent: number, m: Messages['sleep']['results']): string {
+  if (deltaPercent < 0) return interpolate(m.vsBaselineDown, { percent: Math.abs(deltaPercent) });
+  if (deltaPercent > 0) return interpolate(m.vsBaselineUp, { percent: deltaPercent });
+  return m.vsBaselineFlat;
+}
+
+/**
+ * Full correlation-safe trend sentence for one `SnoreComparison`, e.g.
+ * "Snore burden is down 21% since you stopped smoking." `sinceReference`
+ * says which baseline `computeSnoreTrends` actually used — its `vsBaseline`
+ * entries don't carry that themselves, so the caller passes 'preQuit'
+ * whenever `trends.preQuitBaseline` is non-null, else 'firstNights'.
+ * NEVER claims quitting caused the change — always phrased as "since",
+ * describing a correlation in time, not causation.
+ */
+export function formatTrendDelta(
+  comparison: SnoreComparison,
+  sinceReference: 'preQuit' | 'firstNights',
+  m: Messages['sleep']['trends']
+): string {
+  const metric = m.metricNames[comparison.metric];
+
+  if (comparison.deltaPercent === 0) {
+    return interpolate(
+      sinceReference === 'preQuit' ? m.delta.unchangedSincePreQuit : m.delta.unchangedSinceFirstNights,
+      { metric }
+    );
+  }
+
+  const decreased = comparison.deltaPercent < 0;
+  type DeltaKey = keyof Messages['sleep']['trends']['delta'];
+  const key: DeltaKey = decreased
+    ? sinceReference === 'preQuit'
+      ? 'decreasedSincePreQuit'
+      : 'decreasedSinceFirstNights'
+    : sinceReference === 'preQuit'
+      ? 'increasedSincePreQuit'
+      : 'increasedSinceFirstNights';
+
+  return interpolate(m.delta[key], { metric, percent: Math.abs(comparison.deltaPercent) });
+}
+
+/**
+ * Deletes the given native clip files (best-effort — mirrors the service's
+ * own non-fatal clip-delete handling) and persists every session whose
+ * events reference one of them with `clipPath` cleared, so a stored row
+ * never keeps pointing at audio that no longer exists.
+ */
+export async function deleteClipsAndUpdateSessions(
+  recorder: Pick<SleepRecorder, 'deleteClips'>,
+  store: Pick<DataStore, 'updateSleepSession'>,
+  sessions: SleepSession[],
+  clipPaths: string[]
+): Promise<void> {
+  if (clipPaths.length === 0) return;
+
+  try {
+    await recorder.deleteClips(clipPaths);
+  } catch {
+    // Non-fatal: dangling clip files are harmless; the cleared `clipPath`
+    // fields persisted below are the source of truth going forward.
+  }
+
+  const pathSet = new Set(clipPaths);
+  for (const session of sessions) {
+    if (!session.events?.some((e) => e.clipPath !== undefined && pathSet.has(e.clipPath))) continue;
+
+    const events = session.events.map((event) => {
+      if (event.clipPath === undefined || !pathSet.has(event.clipPath)) return event;
+      const next = { ...event };
+      delete next.clipPath;
+      return next;
+    });
+    await store.updateSleepSession({ ...session, events });
+  }
+}
