@@ -11,6 +11,8 @@ import android.content.pm.ServiceInfo
 import android.media.MediaMetadataRetriever
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.StatFs
@@ -19,6 +21,8 @@ import app.unsmoke.MainActivity
 import app.unsmoke.R
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Foreground microphone recording service. Owns the actual [MediaRecorder],
@@ -37,8 +41,22 @@ import java.io.IOException
  * fresh, explicit, foregrounded user action. A crashed/killed session is
  * instead recovered as 'stopped'/interrupted by [SessionStore.getStatus]'s
  * liveness check the next time anything asks for status.
+ *
+ * All session-mutating work (starting/stopping the recorder, segment
+ * rotation bookkeeping, MediaRecorder's own callbacks) runs on a single
+ * dedicated [workerThread] rather than the main thread: `onStartCommand`
+ * only calls `startForeground` synchronously (a hard platform requirement)
+ * and otherwise just posts to that thread, so a slow `SessionStore.commit()`
+ * or `MediaMetadataRetriever` read never blocks the main thread. The
+ * `MediaRecorder` itself is also constructed there, so its
+ * `OnInfoListener`/`OnErrorListener` callbacks (which fire on the thread
+ * that created the recorder) land on the same thread as everything else —
+ * no extra locking needed for this service's own mutable fields.
  */
 class RecordingService : Service() {
+
+    private val workerThread = HandlerThread("SnoreRecordingWorker")
+    private lateinit var workerHandler: Handler
 
     private lateinit var sessionStore: SessionStore
     private var recorder: MediaRecorder? = null
@@ -51,44 +69,67 @@ class RecordingService : Service() {
     /** Index of the segment file queued via `setNextOutputFile`, if any. */
     private var queuedSegmentIndex: Int? = null
 
-    /** Guards [finalize] so every stop path (intent/error/low-storage/timeout/onDestroy) only runs once. */
+    /** Pending "rotation never completed" watchdog — see [armRotationWatchdog]. */
+    private var rotationWatchdog: Runnable? = null
+
+    /** Guards [finalize] so every stop path (intent/error/low-storage/watchdog/timeout/onDestroy) only runs once per session. */
     private var finalizing = false
 
     override fun onCreate() {
         super.onCreate()
         isRunning = true
         sessionStore = SessionStore(applicationContext)
+        workerThread.start()
+        workerHandler = Handler(workerThread.looper)
         createNotificationChannel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_START -> {
-                // Per the foreground-service contract, this must be the very
-                // first thing done in onStartCommand — before any guard
-                // checks, storage checks, or recorder setup.
-                startForeground(
-                    NOTIF_ID,
-                    buildNotification(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-                )
-                handleStart(intent)
-            }
-            ACTION_STOP -> {
-                val reason = intent.getStringExtra(EXTRA_STOP_REASON) ?: SessionState.STOP_REASON_USER
-                finalize(reason, interrupted = false)
-            }
-            else -> {
-                // Unknown/missing action with no active recorder: nothing to do.
-                if (recorder == null) stopSelf()
+        // Must be the very first thing done — for EVERY action, not just
+        // ACTION_START: a stale PendingIntent (e.g. the notification's Stop
+        // action, or a duplicate ACTION_STOP) can cause Android to spin up a
+        // brand-new Service instance that never called startForeground yet,
+        // and the platform treats "started via startForegroundService but
+        // never called startForeground" as a crash-worthy violation
+        // regardless of which action triggered the start. Guarded because
+        // ForegroundServiceStartNotAllowedException (API 31+) / a plain
+        // SecurityException are both real possibilities (e.g. background
+        // start restrictions) — if we legally can't run as an FGS right
+        // now, there is nothing to record; tear down instead of crashing
+        // the process.
+        try {
+            startForeground(
+                NOTIF_ID,
+                buildNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+            )
+        } catch (e: Exception) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        val action = intent?.action
+        val sessionIdExtra = intent?.getStringExtra(EXTRA_SESSION_ID)
+        val stopReasonExtra = intent?.getStringExtra(EXTRA_STOP_REASON)
+        workerHandler.post {
+            when (action) {
+                ACTION_START -> handleStart(sessionIdExtra)
+                ACTION_STOP -> finalizeIfRecording(stopReasonExtra ?: SessionState.STOP_REASON_USER, interrupted = false)
+                else -> {
+                    // Unknown/missing action with no active recorder: nothing to do.
+                    if (recorder == null) {
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                }
             }
         }
         return START_NOT_STICKY
     }
 
-    private fun handleStart(intent: Intent) {
+    private fun handleStart(sessionId: String?) {
         if (recorder != null) {
             // Already actively recording — a second ACTION_START (e.g. a
             // duplicate plugin call) is a no-op; the foreground
@@ -96,14 +137,26 @@ class RecordingService : Service() {
             return
         }
 
-        val sessionId = intent.getStringExtra(EXTRA_SESSION_ID)
+        // A brand-new recording is starting on this Service instance.
+        // Android is free to reuse the SAME instance for a fresh
+        // ACTION_START shortly after a previous session's finalize()
+        // already ran (stopSelf() only *requests* teardown — it does not
+        // synchronously destroy the instance, so a subsequent
+        // startForegroundService call can arrive and be handled by this
+        // same object before onDestroy ever runs). Reset the finalize-guard
+        // here, at the point a *new* session is confirmed to be starting,
+        // rather than trying to reject/redirect to a new instance — this is
+        // simpler and keeps all the per-session mutable state resets (segment
+        // indices, session dir, watchdog) in one place.
+        finalizing = false
+
         if (sessionId.isNullOrBlank()) {
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
             return
         }
 
         if (!hasEnoughStorage()) {
-            finalize(SessionState.STOP_REASON_LOW_STORAGE, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_LOW_STORAGE, interrupted = true)
             return
         }
 
@@ -135,25 +188,23 @@ class RecordingService : Service() {
             newRecorder.setOutputFile(firstFile.absolutePath)
             newRecorder.setOnInfoListener { _, what, _ ->
                 when (what) {
-                    MediaRecorder.MEDIA_RECORDER_INFO_NEXT_OUTPUT_FILE_STARTED -> onSegmentRotated()
-                    // MEDIA_RECORDER_INFO_MAX_DURATION_REACHED itself needs no
-                    // action: the next file was already queued via
-                    // setNextOutputFile ahead of time (right after start, and
-                    // again after each rotation below), which is what lets
-                    // MediaRecorder switch to it automatically at this
-                    // boundary.
+                    MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED -> armRotationWatchdog()
+                    MediaRecorder.MEDIA_RECORDER_INFO_NEXT_OUTPUT_FILE_STARTED -> {
+                        cancelRotationWatchdog()
+                        onSegmentRotated()
+                    }
                 }
             }
-            newRecorder.setOnErrorListener { _, _, _ -> finalize(SessionState.STOP_REASON_ERROR, interrupted = true) }
+            newRecorder.setOnErrorListener { _, _, _ -> finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true) }
             newRecorder.prepare()
             newRecorder.start()
         } catch (e: IOException) {
             newRecorder.release()
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
             return
         } catch (e: RuntimeException) {
             newRecorder.release()
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
             return
         }
         recorder = newRecorder
@@ -164,7 +215,7 @@ class RecordingService : Service() {
     private fun queueNextSegment() {
         val current = recorder ?: return
         if (!hasEnoughStorage()) {
-            finalize(SessionState.STOP_REASON_LOW_STORAGE, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_LOW_STORAGE, interrupted = true)
             return
         }
         val nextIndex = activeSegmentIndex + 1
@@ -172,10 +223,42 @@ class RecordingService : Service() {
             current.setNextOutputFile(segmentFile(nextIndex))
             queuedSegmentIndex = nextIndex
         } catch (e: IOException) {
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
         } catch (e: IllegalStateException) {
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
         }
+    }
+
+    /**
+     * `MEDIA_RECORDER_INFO_MAX_DURATION_REACHED` fired but is otherwise a
+     * no-op: the queued next file (from `setNextOutputFile`) is what lets
+     * MediaRecorder switch automatically. But if the platform stops the
+     * recorder at this boundary instead of rotating into that file (rather
+     * than firing `NEXT_OUTPUT_FILE_STARTED`), nothing would ever notice —
+     * `getStatus()` would keep reporting 'recording' forever while nothing
+     * is actually being captured. Arm a short defensive timer that
+     * force-finalizes as an error if the rotation genuinely never completes.
+     *
+     * (Considered also setting `setMaxFileSize` as a companion boundary —
+     * decided against it: `MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED` is a
+     * distinct info code that, unlike duration + `setNextOutputFile`, is not
+     * documented to trigger an automatic seamless file switch, so it would
+     * add a second, differently-behaved rotation trigger to reason about.
+     * This watchdog already covers "rotation stalled for any reason,"
+     * duration-based or not, without complicating the protocol.)
+     */
+    private fun armRotationWatchdog() {
+        cancelRotationWatchdog()
+        val watchdog = Runnable {
+            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
+        }
+        rotationWatchdog = watchdog
+        workerHandler.postDelayed(watchdog, ROTATION_WATCHDOG_MS)
+    }
+
+    private fun cancelRotationWatchdog() {
+        rotationWatchdog?.let { workerHandler.removeCallbacks(it) }
+        rotationWatchdog = null
     }
 
     /** MediaRecorder just switched from `activeSegmentIndex` to `queuedSegmentIndex` — the former is now finalized on disk. */
@@ -193,16 +276,52 @@ class RecordingService : Service() {
     }
 
     /**
+     * Guards [finalize] against running for a session this Service instance
+     * was never actually driving: a stray `ACTION_STOP`/unknown action can
+     * reach a *fresh* instance (Android creates one on demand for a stale
+     * PendingIntent even after the real session's instance already finished
+     * and was destroyed). In that case `recorder` is null here not because
+     * this instance finished recording, but because it never started one —
+     * blindly calling `finalize()` would stomp whatever `SessionStore`
+     * currently holds (a liveness-recovered 'error' state, or plain 'idle')
+     * with a fabricated 'stopped'/'user'/now, or even a phantom 'stopped'
+     * session with no `sessionId`. Only proceed if `SessionStore` itself
+     * still agrees a recording is live.
+     *
+     * This self-selects correctly for every OTHER caller too (storage guard
+     * on start, prepare/start failure, error listener, rotation watchdog,
+     * `onTimeout`): by the time any of those run, `SessionStore` already
+     * has `phase == 'recording'` for THIS session (the plugin writes it
+     * before ever starting this service), so the guard condition above is
+     * false for them regardless of whether `recorder` happens to be null
+     * yet (e.g. a `prepare()`/`start()` failure before the field is
+     * assigned) — they always fall through to a real [finalize] without
+     * needing to say so explicitly.
+     */
+    private fun finalizeIfRecording(stopReason: String, interrupted: Boolean) {
+        if (finalizing) return
+        if (recorder == null && sessionStore.getStatus().phase != SessionState.PHASE_RECORDING) {
+            finalizing = true
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return
+        }
+        finalize(stopReason, interrupted)
+    }
+
+    /**
      * Every stop path converges here: recorder stop/release, measuring the
      * final (still-open) segment, persisting the 'stopped' state, releasing
      * the wake lock, and tearing down the foreground service. Guarded by
      * [finalizing] so it only ever runs once per session no matter how many
-     * of ACTION_STOP / the error listener / the low-storage guard /
-     * [onTimeout] / [onDestroy] fire.
+     * of ACTION_STOP / the error listener / the low-storage guard / the
+     * rotation watchdog / [onTimeout] / [onDestroy] fire. Always reached
+     * through [finalizeIfRecording], never called directly.
      */
     private fun finalize(stopReason: String, interrupted: Boolean) {
         if (finalizing) return
         finalizing = true
+        cancelRotationWatchdog()
 
         val activeRecorder = recorder
         recorder = null
@@ -330,14 +449,15 @@ class RecordingService : Service() {
      * timeout here, the session still ends cleanly through [finalize]
      * instead of being killed out from under [SessionStore] with a stale
      * 'recording' row (which would then rely solely on the liveness check
-     * to notice).
+     * to notice). Runs on the main thread (the platform calls it directly),
+     * so it hops onto [workerHandler] rather than touching recorder state itself.
      */
     override fun onTimeout(startId: Int) {
-        finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+        workerHandler.post { finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true) }
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
-        finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+        workerHandler.post { finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true) }
     }
 
     override fun onDestroy() {
@@ -345,13 +465,28 @@ class RecordingService : Service() {
             // Sanity net: if the service is being torn down through any path
             // that didn't already go through finalize() (e.g. the system
             // killing it directly), still try to persist real segment
-            // durations while the process is alive to do so. If the process
-            // is killed hard enough that onDestroy never runs at all,
-            // SessionStore.getStatus()'s liveness check (isRunning == false)
-            // is the fallback that recovers the session as stopped/interrupted.
-            finalize(SessionState.STOP_REASON_ERROR, interrupted = true)
+            // durations while the process is alive to do so. onDestroy runs
+            // on the main thread, but all the mutable recorder state this
+            // touches is confined to workerThread, so this posts there and
+            // blocks briefly (bounded, well under the ANR watchdog) waiting
+            // for it — the alternative, mutating that state directly from
+            // the main thread, would race with anything workerThread might
+            // still be mid-way through. If the process is killed hard enough
+            // that onDestroy never runs at all, SessionStore.getStatus()'s
+            // liveness check (isRunning == false) is the fallback that
+            // recovers the session as stopped/interrupted.
+            val latch = CountDownLatch(1)
+            workerHandler.post {
+                try {
+                    finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
+                } finally {
+                    latch.countDown()
+                }
+            }
+            latch.await(ON_DESTROY_FINALIZE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
         } finally {
             isRunning = false
+            workerThread.quitSafely()
             super.onDestroy()
         }
     }
@@ -370,6 +505,8 @@ class RecordingService : Service() {
         private const val AUDIO_SAMPLING_RATE = 16000
         private const val AUDIO_ENCODING_BIT_RATE = 32000
         private const val MAX_WAKE_LOCK_DURATION_MS = 12 * 60 * 60 * 1000L
+        private const val ROTATION_WATCHDOG_MS = 8_000L
+        private const val ON_DESTROY_FINALIZE_TIMEOUT_MS = 2_000L
 
         /**
          * Set `true` in [onCreate], `false` in [onDestroy]. [SessionStore]

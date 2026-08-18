@@ -2,6 +2,7 @@ package app.unsmoke.snore
 
 import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.os.StatFs
 import androidx.core.content.ContextCompat
 import com.getcapacitor.JSObject
@@ -13,6 +14,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 
 private const val ALIAS_MICROPHONE = "microphone"
+internal const val ALIAS_NOTIFICATIONS = "notifications"
 private const val MIN_FREE_BYTES = 500L * 1024 * 1024
 private const val STOP_POLL_TIMEOUT_MS = 5_000L
 private const val STOP_POLL_INTERVAL_MS = 50L
@@ -24,20 +26,12 @@ private const val STOP_POLL_INTERVAL_MS = 50L
  * phase/stopReason string, and error code below must match
  * `lib/native/snoreMonitor.ts` (the frozen TS contract) exactly, since the
  * JS/native bridge is stringly-typed.
- *
- * `checkPermissions`/`requestPermissions` are intentionally NOT overridden
- * here: the base `Plugin` class already implements both generically from
- * the `@CapacitorPlugin.permissions` annotation below, resolving
- * `{ microphone, notifications }` PermissionState values keyed by alias. On
- * API < 33 (no runtime POST_NOTIFICATIONS permission), `ActivityCompat`
- * reports that check as already granted, which is exactly the "reports
- * 'granted'" behavior this plugin needs there — no extra code required.
  */
 @CapacitorPlugin(
     name = "SnoreMonitor",
     permissions = [
         Permission(strings = [Manifest.permission.RECORD_AUDIO], alias = ALIAS_MICROPHONE),
-        Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
+        Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = ALIAS_NOTIFICATIONS),
     ],
 )
 class SnoreMonitorPlugin : Plugin() {
@@ -47,6 +41,43 @@ class SnoreMonitorPlugin : Plugin() {
     override fun load() {
         super.load()
         sessionStore = SessionStore(context)
+    }
+
+    /**
+     * Overridden (rather than relying on the base `Plugin` implementation
+     * as-is) to normalize its result into exactly the frozen
+     * `PermissionState` union (`'granted' | 'denied' | 'prompt'`) from
+     * `lib/native/snoreMonitor.ts`:
+     * - Capacitor's own `PermissionState` has a fourth value,
+     *   `PROMPT_WITH_RATIONALE` (shown after a first denial, before
+     *   re-prompting) — collapsed to `'prompt'` here so it never escapes the
+     *   contract.
+     * - `POST_NOTIFICATIONS` is only a real runtime permission from API 33
+     *   onward; below that, `ActivityCompat.checkSelfPermission` reports it
+     *   as not granted (there's nothing to grant), which would surface as
+     *   `'denied'`/`'prompt'` instead of the brief-mandated `'granted'`. The
+     *   `notifications` alias is short-circuited to `'granted'` on those
+     *   older OS versions.
+     *
+     * `requestPermissions` is NOT overridden separately: the base `Plugin`
+     * implementation always ends by invoking a same-named permission
+     * callback method — `"checkPermissions"` — via reflection on `this`,
+     * which Java's normal virtual dispatch resolves to THIS override (not
+     * the base declaration it was looked up from), so the same
+     * normalization applies to `requestPermissions()`'s result too.
+     */
+    @PluginMethod
+    override fun checkPermissions(call: PluginCall) {
+        val states = getPermissionStates()
+        call.resolve(
+            JSObject().apply {
+                put(ALIAS_MICROPHONE, PermissionNormalization.normalize(ALIAS_MICROPHONE, states[ALIAS_MICROPHONE], Build.VERSION.SDK_INT))
+                put(
+                    ALIAS_NOTIFICATIONS,
+                    PermissionNormalization.normalize(ALIAS_NOTIFICATIONS, states[ALIAS_NOTIFICATIONS], Build.VERSION.SDK_INT),
+                )
+            },
+        )
     }
 
     @PluginMethod
@@ -91,7 +122,20 @@ class SnoreMonitorPlugin : Plugin() {
             action = RecordingService.ACTION_START
             putExtra(RecordingService.EXTRA_SESSION_ID, sessionId)
         }
-        ContextCompat.startForegroundService(context, intent)
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            // SecurityException / ForegroundServiceStartNotAllowedException
+            // (API 31+, background-start restrictions) would otherwise
+            // propagate up through the Capacitor bridge and crash the
+            // process instead of just failing this one promise. SessionStore
+            // is deliberately left as 'recording' here rather than rolled
+            // back: the next getStatus() call's liveness check
+            // (RecordingService.isRunning stays false — the service never
+            // actually started) will self-heal it to 'stopped'/'error'.
+            call.reject("Unable to start the recording foreground service: ${e.message}", "PERMISSION_DENIED")
+            return
+        }
 
         call.resolve(
             JSObject().apply {
@@ -125,13 +169,25 @@ class SnoreMonitorPlugin : Plugin() {
             action = RecordingService.ACTION_STOP
             putExtra(RecordingService.EXTRA_STOP_REASON, SessionState.STOP_REASON_USER)
         }
-        ContextCompat.startForegroundService(context, intent)
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            // The recording keeps running natively if this signal never
+            // lands; nothing has been consumed here, so a retried
+            // stopRecording() call is safe.
+            call.reject("Unable to signal the recording service to stop: ${e.message}", "NOT_RECORDING")
+            return
+        }
 
         // RecordingService finalizes asynchronously (it has to stop/release
-        // the MediaRecorder and measure the last segment's real duration),
-        // so poll SessionStore on a background thread until it reports
-        // 'stopped', rather than blocking the bridge thread.
-        execute {
+        // the MediaRecorder and measure the last segment's real duration on
+        // its own worker thread), so poll SessionStore until it reports
+        // 'stopped' on a dedicated, short-lived daemon thread — NOT
+        // Capacitor's shared bridge task-handler thread (`Plugin.execute`),
+        // which every plugin call in the whole app funnels through; blocking
+        // that thread here for up to 5s would stall every other in-flight
+        // plugin call, not just this one.
+        Thread({
             val deadline = System.currentTimeMillis() + STOP_POLL_TIMEOUT_MS
             var polled = sessionStore.getStatus()
             while (polled.phase != SessionState.PHASE_STOPPED && System.currentTimeMillis() < deadline) {
@@ -143,6 +199,9 @@ class SnoreMonitorPlugin : Plugin() {
             } else {
                 call.reject("Timed out waiting for the recording to stop", "NOT_RECORDING")
             }
+        }, "SnoreMonitorStopPoll").apply {
+            isDaemon = true
+            start()
         }
     }
 
