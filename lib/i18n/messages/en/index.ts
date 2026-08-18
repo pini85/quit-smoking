@@ -1,4 +1,6 @@
 import { common } from './common';
+import { chrome } from './chrome';
+import { home } from './home';
 import { you } from './you';
 
 /**
@@ -9,6 +11,8 @@ import { you } from './you';
  */
 export const en = {
   common,
+  chrome,
+  home,
   you,
 };
 

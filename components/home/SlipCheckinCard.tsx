@@ -2,6 +2,7 @@
 
 import type { CravingSession } from '@/domain/types';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
+import { useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 
 const STORAGE_KEY = 'unsmoke.slipcheck.dismissed';
@@ -11,11 +12,6 @@ export type SlipCheckinCardProps = {
   cravings: CravingSession[];
   now: Date;
 };
-
-const WITHIN_24H =
-  'The day after a slip is when most quits are decided. One craving at a time — your button is right below.';
-const WITHIN_96H =
-  'Two days past a slip is the highest-risk window closing. Keep going.';
 
 /**
  * Appears only in the days right after a logged cigarette, and says nothing
@@ -28,6 +24,7 @@ const WITHIN_96H =
  * during render.
  */
 export function SlipCheckinCard({ cravings, now }: SlipCheckinCardProps) {
+  const m = useMessages();
   const { value: dismissedId, set: setDismissedId } = useLocalPref(STORAGE_KEY);
 
   const nowMs = now.getTime();
@@ -49,7 +46,7 @@ export function SlipCheckinCard({ cravings, now }: SlipCheckinCardProps) {
   if (ageMs < 0 || ageMs >= 96 * HOUR_MS) return null;
   if (dismissedId === latest.id) return null;
 
-  const message = ageMs < 24 * HOUR_MS ? WITHIN_24H : WITHIN_96H;
+  const message = ageMs < 24 * HOUR_MS ? m.home.slip.within24 : m.home.slip.within96;
   const slipId = latest.id;
 
   return (
@@ -58,7 +55,7 @@ export function SlipCheckinCard({ cravings, now }: SlipCheckinCardProps) {
       <button
         type="button"
         onClick={() => setDismissedId(slipId)}
-        aria-label="Dismiss check-in"
+        aria-label={m.home.slip.dismiss}
         className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
       >
         <svg

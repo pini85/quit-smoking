@@ -6,6 +6,7 @@ import type { BeliefAssessment, CravingSession } from '@/domain/types';
 import { FREEDOM_LESSONS } from '@/data/freedomLessons';
 import { pickDailyBooster } from '@/domain/freedom/lessonPicker';
 import { startOfLocalDay } from '@/domain/time';
+import { interpolate, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 
 export type FreedomCardProps = {
@@ -37,6 +38,7 @@ export type FreedomCardProps = {
  * the craving FAB, which stays the loudest thing on the screen.
  */
 export function FreedomCard({ assessments, cravings, now }: FreedomCardProps) {
+  const m = useMessages();
   // Memoised on the local DAY, not on `now`: Today ticks once a minute and the
   // teaser must not shuffle under the reader. Same reasoning (and the same
   // local-midnight instant) as `BoosterCard`.
@@ -57,14 +59,14 @@ export function FreedomCard({ assessments, cravings, now }: FreedomCardProps) {
   return (
     <Card className="flex flex-col gap-3">
       <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-primary-strong">
-        Freedom
+        {m.home.freedomCard.kicker}
       </p>
 
       <Link
         href="/brain"
         className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-button bg-primary-soft px-5 text-[15px] font-medium text-primary-strong transition-transform duration-[var(--dur-press)] active:scale-[0.97]"
       >
-        My brain is convincing me&hellip;
+        {m.home.freedomCard.brainLink}
       </Link>
 
       {lesson ? (
@@ -74,7 +76,9 @@ export function FreedomCard({ assessments, cravings, now }: FreedomCardProps) {
         >
           {/* `min-w-0` is what actually lets `truncate` bite: a flex item
               won't shrink below its content width without it. */}
-          <span className="min-w-0 truncate">Today&rsquo;s booster: {lesson.title}</span>
+          <span className="min-w-0 truncate">
+            {interpolate(m.home.freedomCard.booster, { title: lesson.title })}
+          </span>
           <span aria-hidden="true" className="ml-1 shrink-0 text-primary-strong">
             &rarr;
           </span>

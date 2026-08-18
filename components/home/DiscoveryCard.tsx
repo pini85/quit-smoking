@@ -4,6 +4,7 @@ import type { HealthMilestone } from '@/domain/types';
 import { HEALTH_MILESTONES } from '@/data/healthMilestones';
 import { daysSinceEpoch } from '@/domain/time';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
+import { useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 
 const STORAGE_KEY = 'unsmoke.discovery.dismissed';
@@ -31,6 +32,7 @@ export type DiscoveryCardProps = {
  * card never flashes in before hiding itself.
  */
 export function DiscoveryCard({ now, onOpenMilestone }: DiscoveryCardProps) {
+  const m = useMessages();
   const { value: dismissedOn, set: setDismissedOn } = useLocalPref(STORAGE_KEY);
 
   const today = localDateKey(now);
@@ -53,12 +55,12 @@ export function DiscoveryCard({ now, onOpenMilestone }: DiscoveryCardProps) {
     <Card className="flex flex-col gap-2">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-accent">
-          Did you know?
+          {m.home.discovery.kicker}
         </p>
         <button
           type="button"
           onClick={() => setDismissedOn(today)}
-          aria-label="Dismiss today's discovery"
+          aria-label={m.home.discovery.dismiss}
           className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
         >
           <svg

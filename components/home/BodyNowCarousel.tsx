@@ -4,6 +4,7 @@ import type { HealthMilestone } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
 import { happeningNow, upcomingSoon } from '@/domain/milestones/engine';
 import { Card } from '@/components/ui/Card';
+import { useMessages } from '@/lib/i18n';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CATEGORY_META } from '@/components/health/categoryMeta';
@@ -25,6 +26,7 @@ function MilestoneNowCard({
   startingSoon: boolean;
   onOpen: () => void;
 }) {
+  const m = useMessages();
   const { milestone, progress } = state;
   const category = CATEGORY_META[milestone.category];
 
@@ -49,9 +51,9 @@ function MilestoneNowCard({
         <EvidenceBadge level={milestone.evidenceLevel} className="self-start" />
 
         {startingSoon ? (
-          <p className="text-[12px] text-ink-faint">Starting soon</p>
+          <p className="text-[12px] text-ink-faint">{m.home.bodyNow.startingSoon}</p>
         ) : progress !== undefined ? (
-          <ProgressBar value={progress} label="Progress through this change" />
+          <ProgressBar value={progress} label={m.home.bodyNow.progressLabel} />
         ) : null}
 
         {milestone.honestNote ? (
@@ -64,19 +66,14 @@ function MilestoneNowCard({
   );
 }
 
-const PREP_TIPS = [
-  'Halve your coffee — quitting doubles caffeine’s kick',
-  'Bin the ashtrays and lighters tonight',
-  'Tell one person your quit moment',
-];
-
 /** Pre-quit stand-in for the carousel: nothing is changing yet, so prepare. */
 export function PreQuitPrepCard() {
+  const m = useMessages();
   return (
     <Card className="flex flex-col gap-3">
-      <h2 className="text-[20px] font-semibold tracking-tight text-ink">While you wait</h2>
+      <h2 className="text-[20px] font-semibold tracking-tight text-ink">{m.home.prep.title}</h2>
       <ul className="flex flex-col gap-2">
-        {PREP_TIPS.map((tip) => (
+        {m.home.prep.tips.map((tip) => (
           <li key={tip} className="flex gap-2 text-[14px] leading-relaxed text-ink-muted">
             <span aria-hidden="true" className="text-primary">
               ·
@@ -105,6 +102,7 @@ export function BodyNowCarousel({
   showEmergingEvidence,
   onOpenMilestone,
 }: BodyNowCarouselProps) {
+  const m = useMessages();
   const visible = filterEmerging(states, showEmergingEvidence);
 
   const live = happeningNow(visible).slice(0, 3);
@@ -116,7 +114,7 @@ export function BodyNowCarousel({
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-[20px] font-semibold tracking-tight text-ink">
-        What&rsquo;s changing in your body right now
+        {m.home.bodyNow.title}
       </h2>
 
       <div className="-mx-5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-1">

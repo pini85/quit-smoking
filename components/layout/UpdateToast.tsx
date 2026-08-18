@@ -1,6 +1,7 @@
 'use client';
 
 import { useServiceWorker } from '@/lib/hooks/useServiceWorker';
+import { useMessages } from '@/lib/i18n';
 import { Button } from '@/components/ui/Button';
 
 export type UpdateToastProps = {
@@ -21,6 +22,7 @@ export type UpdateToastProps = {
  */
 export function UpdateToast({ suppressed = false }: UpdateToastProps) {
   const { updateReady, applyUpdate } = useServiceWorker();
+  const m = useMessages();
 
   if (!updateReady || suppressed) return null;
 
@@ -30,9 +32,9 @@ export function UpdateToast({ suppressed = false }: UpdateToastProps) {
       className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+152px)] z-50 flex justify-center px-5"
     >
       <div className="animate-fade-in flex w-full max-w-md items-center justify-between gap-3 rounded-button border border-border bg-surface-raised px-4 py-3 shadow-lg">
-        <span className="text-sm text-ink">A new version is ready</span>
+        <span className="text-sm text-ink">{m.chrome.updateReady}</span>
         <Button variant="secondary" onClick={applyUpdate}>
-          Refresh
+          {m.chrome.refresh}
         </Button>
       </div>
     </div>

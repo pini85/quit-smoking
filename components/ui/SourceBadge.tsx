@@ -1,3 +1,7 @@
+'use client';
+
+import { useMessages } from '@/lib/i18n';
+
 export type SourceKind = 'carr' | 'psych' | 'med';
 
 export type SourceBadgeProps = {
@@ -16,20 +20,20 @@ export type SourceBadgeProps = {
  * (sentence case, always bordered) so the two never read as one scale — a
  * shared component would collapse two different meanings into one.
  */
-const KINDS: Record<SourceKind, { label: string; tone: string }> = {
-  carr: { label: 'A way of seeing it', tone: 'border-border bg-surface text-ink-faint' },
-  psych: { label: 'Psychology', tone: 'border-border bg-surface-raised text-ink-muted' },
-  med: { label: 'Medical evidence', tone: 'border-primary bg-primary-soft text-primary-strong' },
+const TONES: Record<SourceKind, string> = {
+  carr: 'border-border bg-surface text-ink-faint',
+  psych: 'border-border bg-surface-raised text-ink-muted',
+  med: 'border-primary bg-primary-soft text-primary-strong',
 };
 
 export function SourceBadge({ kind, className }: SourceBadgeProps) {
-  const { label, tone } = KINDS[kind];
+  const m = useMessages();
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone} ${className ?? ''}`}
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONES[kind]} ${className ?? ''}`}
     >
-      {label}
+      {m.chrome.source[kind]}
     </span>
   );
 }

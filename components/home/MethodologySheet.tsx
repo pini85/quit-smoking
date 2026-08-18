@@ -9,6 +9,7 @@ import {
   moneySaved,
 } from '@/domain/stats/quitStats';
 import { formatCount } from '@/components/formatCount';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { formatMoney } from './formatMoney';
 
 export type MethodologySheetProps = {
@@ -33,33 +34,38 @@ function Row({ heading, children }: { heading: string; children: ReactNode }) {
  * tapping any stat tile.
  */
 export function MethodologySheet({ open, onClose, profile, now }: MethodologySheetProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   const avoided = cigarettesAvoided(profile, now);
   const saved = moneySaved(profile, now);
 
   return (
-    <Sheet open={open} onClose={onClose} title="How these numbers work">
+    <Sheet open={open} onClose={onClose} title={m.home.methodology.title}>
       <div className="flex flex-col gap-5 pb-2">
-        <Row heading="Cigarettes not smoked">
-          You told us you smoked {profile.cigarettesPerDay} a day. We multiply that by
-          how long you&rsquo;ve been smoke-free and round down — so far, {formatCount(avoided)}.
+        <Row heading={m.home.methodology.cigsHeading}>
+          {interpolate(m.home.methodology.cigsBody, {
+            perDay: profile.cigarettesPerDay,
+            count: formatCount(avoided, locale),
+          })}
         </Row>
 
-        <Row heading="Money saved">
-          {profile.cigarettesPerDay} cigarettes a day out of packs of{' '}
-          {profile.cigarettesPerPack} at {formatMoney(profile.packPrice, profile.currency)}{' '}
-          a pack works out at {formatMoney(saved, profile.currency)} so far. It assumes
-          your old rate stayed constant and that prices haven&rsquo;t changed.
+        <Row heading={m.home.methodology.moneyHeading}>
+          {interpolate(m.home.methodology.moneyBody, {
+            perDay: profile.cigarettesPerDay,
+            perPack: profile.cigarettesPerPack,
+            packPrice: formatMoney(profile.packPrice, profile.currency, locale),
+            saved: formatMoney(saved, profile.currency, locale),
+          })}
         </Row>
 
-        <Row heading="Life regained">
-          Research from UCL (2024) estimates each cigarette costs roughly 17–22 minutes of
-          life. We use {MINUTES_OF_LIFE_PER_CIGARETTE} minutes, near the middle of that
-          range, multiplied by the cigarettes you haven&rsquo;t smoked. It&rsquo;s a
-          population average, not a promise about your particular body.
+        <Row heading={m.home.methodology.lifeHeading}>
+          {interpolate(m.home.methodology.lifeBody, {
+            minutes: MINUTES_OF_LIFE_PER_CIGARETTE,
+          })}
         </Row>
 
         <p className="rounded-card bg-surface-raised px-4 py-3 text-[13px] leading-relaxed text-ink-muted">
-          These are estimates, honestly labeled.
+          {m.home.methodology.estimatesNote}
         </p>
       </div>
     </Sheet>

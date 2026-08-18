@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useMessages } from '@/lib/i18n';
 
 export type CravingFABProps = {
   className?: string;
@@ -16,6 +17,7 @@ export type CravingFABProps = {
  * over a transition, which silently killed the press-scale feedback.
  */
 export function CravingFAB({ className }: CravingFABProps) {
+  const m = useMessages();
   return (
     <span className={`animate-fab-breathe inline-flex rounded-full ${className ?? ''}`}>
       <Link
@@ -36,7 +38,7 @@ export function CravingFAB({ className }: CravingFABProps) {
           <path d="M1.5 8q2.25-3 4.5 0t4.5 0t4.5 0" opacity="0.8" />
           <path d="M1.5 12q2.25-3 4.5 0t4.5 0t4.5 0" opacity="0.6" />
         </svg>
-        <span className="text-[11px] font-medium leading-none">Craving</span>
+        <span className="text-[11px] font-medium leading-none">{m.chrome.cravingFab}</span>
       </Link>
     </span>
   );

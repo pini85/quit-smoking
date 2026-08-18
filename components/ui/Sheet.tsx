@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useMessages } from '@/lib/i18n';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
@@ -19,6 +20,7 @@ export type SheetProps = {
  * through the UI pops that entry back off so history stays clean.
  */
 export function Sheet({ open, onClose, title, children }: SheetProps) {
+  const m = useMessages();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
@@ -155,7 +157,7 @@ export function Sheet({ open, onClose, title, children }: SheetProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={m.chrome.close}
             className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-muted transition-transform duration-[var(--dur-press)] active:scale-[0.92]"
           >
             <svg

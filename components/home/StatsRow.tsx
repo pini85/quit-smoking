@@ -11,6 +11,7 @@ import {
 import { StatTile } from '@/components/ui/StatTile';
 import { Card } from '@/components/ui/Card';
 import { formatCount } from '@/components/formatCount';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { MethodologySheet } from './MethodologySheet';
 import { formatMoney } from './formatMoney';
 
@@ -27,6 +28,8 @@ export type StatsRowProps = {
  */
 export function StatsRow({ profile, now, moneyEquivalents }: StatsRowProps) {
   const [open, setOpen] = useState(false);
+  const { locale } = useLocale();
+  const m = useMessages();
 
   const avoided = cigarettesAvoided(profile, now);
   const saved = moneySaved(profile, now);
@@ -37,19 +40,25 @@ export function StatsRow({ profile, now, moneyEquivalents }: StatsRowProps) {
     <>
       <Card className="grid grid-cols-3 gap-2">
         <StatTile
-          value={formatCount(avoided)}
-          label="not smoked"
+          value={formatCount(avoided, locale)}
+          label={m.home.stats.notSmoked}
           onPress={() => setOpen(true)}
         />
         <StatTile
-          value={formatMoney(saved, profile.currency)}
-          label="saved"
+          value={formatMoney(saved, profile.currency, locale)}
+          label={m.home.stats.saved}
           sub={equivalent ? `≈ ${equivalent.count}× ${equivalent.label}` : undefined}
           onPress={() => setOpen(true)}
         />
         <StatTile
-          value={`${formatCount(life.days)}d ${life.hours}h`}
-          label="life regained"
+          // Grouped day count (a decade-long quit regains 1,000+ days), so
+          // the compact unit is appended by hand rather than via formatCompact.
+          value={
+            locale === 'fi'
+              ? `${formatCount(life.days, 'fi')} pv ${life.hours} t`
+              : `${formatCount(life.days)}d ${life.hours}h`
+          }
+          label={m.home.stats.lifeRegained}
           onPress={() => setOpen(true)}
         />
       </Card>

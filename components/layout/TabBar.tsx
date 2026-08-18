@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
+import { useMessages, type Messages } from '@/lib/i18n';
 import { CravingFAB } from './CravingFAB';
 
 type Tab = {
   href: string;
-  label: string;
+  labelKey: keyof Messages['chrome']['tabs'];
   icon: ReactNode;
 };
 
@@ -35,7 +36,7 @@ const LEFT_COUNT = 3;
 const TABS: Tab[] = [
   {
     href: '/',
-    label: 'Today',
+    labelKey: 'today',
     icon: (
       <svg {...iconProps}>
         <circle cx="12" cy="12" r="4" />
@@ -45,7 +46,7 @@ const TABS: Tab[] = [
   },
   {
     href: '/progress',
-    label: 'Progress',
+    labelKey: 'progress',
     icon: (
       <svg {...iconProps}>
         <path d="M4 19V5" />
@@ -56,7 +57,7 @@ const TABS: Tab[] = [
   },
   {
     href: '/freedom',
-    label: 'Freedom',
+    labelKey: 'freedom',
     icon: (
       <svg {...iconProps}>
         {/* The door frame, and the floor it stands on. */}
@@ -70,7 +71,7 @@ const TABS: Tab[] = [
   },
   {
     href: '/health',
-    label: 'Health',
+    labelKey: 'health',
     icon: (
       <svg {...iconProps}>
         <path d="M12 20s-7-4.6-7-9.4A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.6C19 15.4 12 20 12 20z" />
@@ -79,7 +80,7 @@ const TABS: Tab[] = [
   },
   {
     href: '/you',
-    label: 'You',
+    labelKey: 'you',
     icon: (
       <svg {...iconProps}>
         <circle cx="12" cy="12" r="9" />
@@ -96,6 +97,7 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
+  const m = useMessages();
   return (
     <Link
       href={tab.href}
@@ -109,19 +111,20 @@ function TabLink({ tab, active }: { tab: Tab; active: boolean }) {
           labels no longer fit their third of the row, and without these the
           widest one ("Progress") would push the whole bar — and the FAB with
           it — off centre. */}
-      <span className="max-w-full truncate text-[11px] leading-none">{tab.label}</span>
+      <span className="max-w-full truncate text-[11px] leading-none">{m.chrome.tabs[tab.labelKey]}</span>
     </Link>
   );
 }
 
 export function TabBar() {
   const pathname = usePathname();
+  const m = useMessages();
   const left = TABS.slice(0, LEFT_COUNT);
   const right = TABS.slice(LEFT_COUNT);
 
   return (
     <nav
-      aria-label="Primary"
+      aria-label={m.chrome.primaryNav}
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-md"
     >
       <div className="mx-auto flex h-16 max-w-md items-stretch px-1">

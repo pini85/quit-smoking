@@ -7,7 +7,7 @@ import { computeMilestoneStates, nextMilestone } from '@/domain/milestones/engin
 import { formatDurationDigital, formatSmokeFreeDuration } from '@/domain/time';
 import { recoveryStageLabel, recoveryStage } from '@/domain/stats/quitStats';
 import { useNow } from '@/lib/hooks/useNow';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { Ring } from '@/components/ui/Ring';
 import { humanizeEta } from './humanizeEta';
 
@@ -83,6 +83,7 @@ function digitalSizeClass(text: string): string {
 export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
   const now = useNow(1000);
   const { locale } = useLocale();
+  const m = useMessages();
   const [precise, setPrecise] = useState(false);
 
   const quitAtMs = quitAt.getTime();
@@ -122,7 +123,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
         <span aria-hidden="true" className="text-primary">
           ●
         </span>
-        {preQuit ? 'Ready to start' : recoveryStageLabel(stage, locale)}
+        {preQuit ? m.home.hero.readyToStart : recoveryStageLabel(stage, locale)}
       </p>
 
       <button
@@ -144,7 +145,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
           {preQuit ? (
             <>
               <span className="px-6 text-[15px] leading-tight text-ink-muted">
-                Freedom starts in
+                {m.home.hero.freedomStartsIn}
               </span>
               <span
                 className={`mt-2 font-semibold leading-none tabular-nums text-ink ${digitalSizeClass(digital)}`}
@@ -167,13 +168,11 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
                 </span>
               ) : null}
               <span className="mt-2 text-[13px] leading-tight text-ink-faint">
-                smoke-free
+                {m.home.hero.smokeFree}
               </span>
               {/* No aria-label on the button: it would replace the duration
                   itself for screen readers. The hint is added instead. */}
-              <span className="sr-only">
-                Tap to switch between rounded and precise time.
-              </span>
+              <span className="sr-only">{m.home.hero.preciseHint}</span>
             </>
           )}
         </Ring>
@@ -183,7 +182,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
           itself — and everything the body did with it — is still the user's. */}
       {!preQuit && sinceQuit ? (
         <p className="max-w-[30ch] text-balance px-2 text-center text-[13px] leading-relaxed text-ink-faint">
-          {sinceQuit} since you quit — still yours
+          {interpolate(m.home.hero.sinceQuit, { duration: sinceQuit })}
         </p>
       ) : null}
 
@@ -193,7 +192,10 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
           onClick={() => onOpenMilestone(next.state.milestone)}
           className="min-h-11 max-w-[30ch] text-balance px-2 text-center text-[13px] leading-relaxed text-ink-muted"
         >
-          Next: {next.state.milestone.title} — {humanizeEta(next.etaMs, locale)}
+          {interpolate(m.home.hero.next, {
+            title: next.state.milestone.title,
+            eta: humanizeEta(next.etaMs, locale),
+          })}
         </button>
       ) : null}
     </section>
