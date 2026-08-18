@@ -1,5 +1,10 @@
 export const progress = {
   pageTitle: 'Edistys',
+  insights: {
+    title: 'Havainnot',
+    empty: 'Ei vielä mitään kerrottavaa — emmekä keksi mitään. Havainnot tulevat tänne vain oikeasta datastasi.',
+    fromYourData: 'Datastasi',
+  },
   cravingDecline: {
     title: 'Mielitekojen väheneminen',
     empty:

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import type { CravingSession } from '@/domain/types';
 import { generateInsights } from '@/domain/stats/insights';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -14,11 +14,6 @@ export type InsightsFeedProps = {
 };
 
 const DAY_MS = 86_400_000;
-
-// Kept as a string constant (straight apostrophe) to match the other
-// empty/gated copies in this folder, which all live in `emptyCopy` props.
-const EMPTY_COPY =
-  "Nothing to say yet — and we won't invent anything. Insights here come only from your real data.";
 
 /**
  * Rotates through the FULL deterministic rule output (requested with
@@ -32,6 +27,7 @@ const EMPTY_COPY =
  */
 export function InsightsFeed({ sessions, quitAt, now }: InsightsFeedProps) {
   const { locale } = useLocale();
+  const m = useMessages();
   const shown = useMemo(() => {
     const full = generateInsights(sessions, quitAt, now, 99, locale);
     if (full.length === 0) return [];
@@ -43,15 +39,15 @@ export function InsightsFeed({ sessions, quitAt, now }: InsightsFeedProps) {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-[17px] font-semibold tracking-tight text-ink">Insights</h2>
+      <h2 className="text-[17px] font-semibold tracking-tight text-ink">{m.progress.insights.title}</h2>
       {shown.length === 0 ? (
-        <EmptyState>{EMPTY_COPY}</EmptyState>
+        <EmptyState>{m.progress.insights.empty}</EmptyState>
       ) : (
         <div className="flex flex-col gap-3">
           {shown.map((insight) => (
             <Card key={insight.id} className="flex flex-col gap-1.5">
               <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-                <span aria-hidden="true">💡</span> From your data
+                <span aria-hidden="true">💡</span> {m.progress.insights.fromYourData}
               </p>
               <p className="text-[14px] leading-relaxed text-ink">{insight.text}</p>
             </Card>

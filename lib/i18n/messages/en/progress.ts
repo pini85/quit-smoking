@@ -1,5 +1,10 @@
 export const progress = {
   pageTitle: 'Progress',
+  insights: {
+    title: 'Insights',
+    empty: 'Nothing to say yet — and we won’t invent anything. Insights here come only from your real data.',
+    fromYourData: 'From your data',
+  },
   cravingDecline: {
     title: 'Craving decline',
     empty:
