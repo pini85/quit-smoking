@@ -145,7 +145,7 @@ describe('markFailed', () => {
 
 describe('classifyPendingSessions', () => {
   it('buckets nothing for an empty pending list', () => {
-    expect(classifyPendingSessions([], { recording: false })).toEqual({
+    expect(classifyPendingSessions([], { phase: 'idle' })).toEqual({
       live: null,
       finalize: [],
       retryAnalysis: [],
@@ -156,7 +156,7 @@ describe('classifyPendingSessions', () => {
   it('adopts a recording row whose id matches a live native session', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
     const result = classifyPendingSessions([row], {
-      recording: true,
+      phase: 'recording',
       sessionId: 'sess-1',
       startedAtMs: STARTED.getTime(),
     });
@@ -165,31 +165,45 @@ describe('classifyPendingSessions', () => {
     expect(result.lost).toEqual([]);
   });
 
-  it('finalizes a recording row whose id matches a native stopped-with-result session', () => {
+  it('finalizes a recording row whose id matches a native stopped-with-result session, deriving durationMs from wall-clock when the claim omits it', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
     const endedAtMs = STARTED.getTime() + 5_000_000;
-    const result = classifyPendingSessions([row], { recording: false }, {
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
       sessionId: 'sess-1',
       endedAtMs,
       interrupted: true,
     });
-    expect(result.finalize).toEqual([{ session: row, endedAtMs, interrupted: true }]);
+    expect(result.finalize).toEqual([{ session: row, endedAtMs, durationMs: 5_000_000, interrupted: true }]);
     expect(result.live).toBeNull();
     expect(result.lost).toEqual([]);
   });
 
+  it('prefers the claimed durationMs (real decodable audio) over the wall-clock span — the interrupted-recording case', () => {
+    const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
+    const endedAtMs = STARTED.getTime() + 3_600_000; // 1h wall-clock span
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
+      sessionId: 'sess-1',
+      endedAtMs,
+      durationMs: 3_000_000, // only 50min actually decoded (interrupted)
+      interrupted: true,
+    });
+    expect(result.finalize[0].durationMs).toBe(3_000_000);
+  });
+
   it('defaults interrupted to false when the native record omits it', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
-    const result = classifyPendingSessions([row], { recording: false }, {
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
       sessionId: 'sess-1',
       endedAtMs: STARTED.getTime() + 1000,
     });
-    expect(result.finalize).toEqual([{ session: row, endedAtMs: STARTED.getTime() + 1000, interrupted: false }]);
+    expect(result.finalize).toEqual([
+      { session: row, endedAtMs: STARTED.getTime() + 1000, durationMs: 1000, interrupted: false },
+    ]);
   });
 
   it('marks a recording row with no native knowledge at all as lost', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
-    const result = classifyPendingSessions([row], { recording: false });
+    const result = classifyPendingSessions([row], { phase: 'idle' });
     expect(result.lost).toEqual([row]);
     expect(result.live).toBeNull();
     expect(result.finalize).toEqual([]);
@@ -198,7 +212,7 @@ describe('classifyPendingSessions', () => {
   it('marks a recording row as lost when native is recording a DIFFERENT session', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
     const result = classifyPendingSessions([row], {
-      recording: true,
+      phase: 'recording',
       sessionId: 'sess-OTHER',
       startedAtMs: STARTED.getTime(),
     });
@@ -208,7 +222,7 @@ describe('classifyPendingSessions', () => {
 
   it('buckets a recorded row into retryAnalysis regardless of native status', () => {
     const row = recordedSession();
-    const result = classifyPendingSessions([row], { recording: false });
+    const result = classifyPendingSessions([row], { phase: 'idle' });
     expect(result.retryAnalysis).toEqual([row]);
     expect(result.lost).toEqual([]);
   });
@@ -221,13 +235,13 @@ describe('classifyPendingSessions', () => {
 
     const result = classifyPendingSessions(
       [live, toFinalize, recorded, lost],
-      { recording: true, sessionId: 'live', startedAtMs: STARTED.getTime() },
+      { phase: 'recording', sessionId: 'live', startedAtMs: STARTED.getTime() },
       { sessionId: 'stopped', endedAtMs: STARTED.getTime() + 1000, interrupted: false }
     );
 
     expect(result.live).toBe(live);
     expect(result.finalize).toEqual([
-      { session: toFinalize, endedAtMs: STARTED.getTime() + 1000, interrupted: false },
+      { session: toFinalize, endedAtMs: STARTED.getTime() + 1000, durationMs: 1000, interrupted: false },
     ]);
     expect(result.retryAnalysis).toEqual([recorded]);
     expect(result.lost).toEqual([lost]);
@@ -236,24 +250,38 @@ describe('classifyPendingSessions', () => {
   it('clock-skew guard: clamps a native endedAtMs before startedAt up to startedAt (zero-length), never throwing', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
     expect(() =>
-      classifyPendingSessions([row], { recording: false }, {
+      classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
         sessionId: 'sess-1',
         endedAtMs: STARTED.getTime() - 10_000,
         interrupted: false,
       })
     ).not.toThrow();
 
-    const result = classifyPendingSessions([row], { recording: false }, {
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
       sessionId: 'sess-1',
       endedAtMs: STARTED.getTime() - 10_000,
       interrupted: false,
     });
     expect(result.finalize[0].endedAtMs).toBe(STARTED.getTime());
+    expect(result.finalize[0].durationMs).toBe(0);
+  });
+
+  it('clamps a negative claimed durationMs to zero, never throwing', () => {
+    const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, {
+      sessionId: 'sess-1',
+      endedAtMs: STARTED.getTime() + 1000,
+      durationMs: -500,
+      interrupted: false,
+    });
+    expect(result.finalize[0].durationMs).toBe(0);
   });
 
   it('treats a nativeStopped record with no endedAtMs as a zero-length finalize', () => {
     const row = buildSleepSession({ id: 'sess-1', startedAt: STARTED, quitAt: null });
-    const result = classifyPendingSessions([row], { recording: false }, { sessionId: 'sess-1' });
-    expect(result.finalize).toEqual([{ session: row, endedAtMs: STARTED.getTime(), interrupted: false }]);
+    const result = classifyPendingSessions([row], { phase: 'stopped', sessionId: 'sess-1' }, { sessionId: 'sess-1' });
+    expect(result.finalize).toEqual([
+      { session: row, endedAtMs: STARTED.getTime(), durationMs: 0, interrupted: false },
+    ]);
   });
 });

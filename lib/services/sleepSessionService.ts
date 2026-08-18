@@ -15,7 +15,7 @@
  * metrics are durably stored.
  */
 import type { DataStore } from '@/lib/services/dataStore';
-import type { SleepRecorder, ClipRange } from '@/lib/recorder/types';
+import type { SleepRecorder, ClipRange, RecorderStopResult } from '@/lib/recorder/types';
 import type { Preferences, SleepSession } from '@/domain/types';
 import type { FeatureFrame } from '@/domain/snore/types';
 import { createSnoreDetector } from '@/domain/snore/detect';
@@ -74,7 +74,7 @@ export class SleepSessionService {
    */
   async startMonitoring(now: Date): Promise<SleepSession> {
     const status = await this.deps.recorder.getStatus();
-    if (status.recording && status.sessionId !== undefined) {
+    if (status.phase === 'recording' && status.sessionId !== undefined) {
       const sessionId = status.sessionId;
       const existing = this.deps.getSessions().find((s) => s.id === sessionId);
       if (existing) return existing;
@@ -112,7 +112,7 @@ export class SleepSessionService {
     void now;
 
     const status = await this.deps.recorder.getStatus();
-    if (!status.recording) return null;
+    if (status.phase !== 'recording') return null;
 
     const result = await this.deps.recorder.stop();
     let session = this.deps.getSessions().find((s) => s.id === result.sessionId);
@@ -142,9 +142,12 @@ export class SleepSessionService {
    * back to that derived (clamped >= 0) duration.
    *
    * A recording shorter than `MIN_ANALYZABLE_MS` still completes and is
-   * stored as 'analyzed' — see `markAnalyzed`'s doc. `markFailed` is
-   * reserved for truly unanalyzable sessions: no feature frames at all, or
-   * native reporting `SESSION_NOT_FOUND`.
+   * stored as 'analyzed' — see `markAnalyzed`'s doc, as long as it actually
+   * decoded to at least one feature frame. `markFailed` is reserved for
+   * truly unanalyzable sessions: ZERO feature frames (nothing decoded at
+   * all — NOT the same as a real quiet night, which still has plenty of
+   * low-RMS frames and simply produces zero snore *events*), or native
+   * reporting `SESSION_NOT_FOUND`.
    *
    * Ordering is safety-critical: the 'analyzed' row (with its metrics) is
    * persisted BEFORE `deleteRecording` is ever called, so a crash or thrown
@@ -162,6 +165,18 @@ export class SleepSessionService {
       // No audio survived natively at all — this session can never be
       // analyzed. Pin to `startedAt`, never a clock read; the domain
       // `markFailed` only uses this if the row has no `endedAt` yet.
+      const failed = markFailed(session, new Date(session.startedAt));
+      await this.deps.store.updateSleepSession(failed);
+      return failed;
+    }
+
+    if (frames.length === 0) {
+      // Nothing decoded at all — e.g. a corrupt or empty audio file. This
+      // is NOT a "quiet night" (which still yields many frames, just no
+      // qualifying snore events) and must never be reported as one: doing
+      // so would both fabricate a clean-night result and, worse, destroy
+      // the only copy of audio nobody has actually looked at yet. Persist
+      // 'failed' and return BEFORE any analysis or `deleteRecording` call.
       const failed = markFailed(session, new Date(session.startedAt));
       await this.deps.store.updateSleepSession(failed);
       return failed;
@@ -217,31 +232,54 @@ export class SleepSessionService {
    *   as-is (no write needed) — or, if native is recording but no row
    *   exists for it at all, a fresh row is created and adopted;
    * - a pending 'recording' row matching a session native already knows
-   *   stopped is finalized and analyzed;
+   *   stopped is finalized (with the real decodable `durationMs` carried
+   *   through from the claimed result — never a wall-clock guess) and analyzed;
    * - each pending 'recorded' row gets a fresh analysis attempt, in
    *   sequence, with failures isolated per session (one bad night never
    *   blocks recovering the rest);
    * - a pending 'recording' row with no native knowledge at all is lost —
    *   marked 'failed' with `endedAt` pinned to `startedAt`.
+   *
+   * "Pending" here means `state === 'recording' || 'recorded'` — NOT
+   * `state !== 'analyzed'` — so 'failed' rows are never resurrected or
+   * rewritten on every launch (they already reached a terminal state).
+   *
+   * Native truth comes ONLY from `getStatus()` here — no speculative
+   * `stop()` call. A stopped-but-unclaimed session is only claimed (via
+   * `stop()`, to get its authoritative result) once `status.phase ===
+   * 'stopped'` has positively confirmed one exists; a rejection at that
+   * point is a real error, not "native remembers nothing", so it is
+   * isolated to that one session (left untouched, still 'recording', for a
+   * later recovery attempt) rather than writing off a real night as lost.
    */
   async recoverOnLaunch(now: Date): Promise<{ live?: SleepSession }> {
     const status = await this.deps.recorder.getStatus();
-    const pending = this.deps.getSessions().filter((s) => s.state !== 'analyzed');
+    const pending = this.deps
+      .getSessions()
+      .filter((s) => s.state === 'recording' || s.state === 'recorded');
 
-    let nativeStopped: { sessionId?: string; endedAtMs?: number; interrupted?: boolean } | undefined;
-    if (!status.recording) {
+    let nativeStopped: RecorderStopResult | undefined;
+    let unclaimedStoppedSessionId: string | undefined;
+    if (status.phase === 'stopped' && status.sessionId !== undefined) {
       try {
         nativeStopped = await this.deps.recorder.stop();
       } catch {
-        // Nothing native remembers stopping — every unmatched 'recording' row is lost, below.
-        nativeStopped = undefined;
+        unclaimedStoppedSessionId = status.sessionId;
       }
     }
 
-    const classification = classifyPendingSessions(pending, status, nativeStopped);
+    // A claim failure is isolated to just that session: exclude it from
+    // classification entirely rather than let it fall into `lost` (which
+    // would mark a night `getStatus()` just told us genuinely exists as
+    // failed, on what may be a transient bridge error).
+    const classifiable = unclaimedStoppedSessionId
+      ? pending.filter((s) => s.id !== unclaimedStoppedSessionId)
+      : pending;
+
+    const classification = classifyPendingSessions(classifiable, status, nativeStopped);
     let live = classification.live;
 
-    if (live === null && status.recording && status.sessionId !== undefined) {
+    if (live === null && status.phase === 'recording' && status.sessionId !== undefined) {
       const sessionId = status.sessionId;
       const adopted = buildSleepSession({
         id: sessionId,
@@ -252,9 +290,8 @@ export class SleepSessionService {
       live = adopted;
     }
 
-    for (const { session, endedAtMs, interrupted } of classification.finalize) {
+    for (const { session, endedAtMs, durationMs, interrupted } of classification.finalize) {
       const startedAtMs = new Date(session.startedAt).getTime();
-      const durationMs = Math.max(0, endedAtMs - startedAtMs);
       const finalized = finalizeRecorded(session, {
         sessionId: session.id,
         startedAtMs,

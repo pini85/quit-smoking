@@ -89,7 +89,7 @@ export interface PendingClassification {
   /** A pending 'recording' row whose id matches a currently-live native session — adopt, no write needed. */
   live: SleepSession | null;
   /** Pending 'recording' rows whose id matches a native session the recorder already knows stopped. */
-  finalize: { session: SleepSession; endedAtMs: number; interrupted: boolean }[];
+  finalize: { session: SleepSession; endedAtMs: number; durationMs: number; interrupted: boolean }[];
   /** Pending 'recorded' rows — full-night audio should still exist natively; analysis is retried. */
   retryAnalysis: SleepSession[];
   /** Pending 'recording' rows with NO matching native audio or status at all — mark failed. */
@@ -98,29 +98,35 @@ export interface PendingClassification {
 
 /**
  * Buckets whatever rows survived a restart into what launch-time recovery
- * should do with each. `pending` is every row with `state !== 'analyzed'`
- * (a 'recorded' row always needs a retry attempt; a 'recording' row needs
- * native truth to resolve, since native — not this row — is the source of
- * truth for recording liveness).
+ * should do with each. `pending` is every row with `state === 'recording'`
+ * or `'recorded'` (the caller — `SleepSessionService.recoverOnLaunch` — is
+ * responsible for that filter: `'analyzed'` rows need no recovery, and
+ * `'failed'` rows must NOT be resurrected here). A `'recorded'` row always
+ * needs a retry attempt; a `'recording'` row needs native truth to resolve,
+ * since native — not this row — is the source of truth for recording
+ * liveness.
  *
- * `nativeStopped` is the recorder's memory of the most recently stopped
- * session, if it has one (there is at most one "last stopped session" at a
- * time) — the service obtains it by calling `recorder.stop()` when
- * `status.recording` is false and catching a "nothing to stop" rejection,
- * which the native contract's `NOT_RECORDING` error already documents as
- * covering "no active/LAST session to act on" (see
- * `lib/native/snoreMonitor.ts`), i.e. re-stopping an already-stopped-but-
- * unclaimed session is expected to succeed and hand back its result.
+ * `nativeStopped`, when present, is the CLAIMED result (a real
+ * `RecorderStopResult`, or a structurally-compatible test double) for
+ * whichever session `status` reported as `phase === 'stopped'`. The service
+ * only calls `recorder.stop()` to obtain it after `status.phase ===
+ * 'stopped'` has positively confirmed a stopped-but-unclaimed session
+ * exists — never speculatively — so by the time this function sees it, it
+ * is trusted, authoritative data (including the real decodable
+ * `durationMs`, not a wall-clock guess). A `'recording'` row with no
+ * matching `nativeStopped` (and not currently live) genuinely has no native
+ * knowledge behind it and is `lost`.
  *
  * Clock-skew guard: if `nativeStopped.endedAtMs` would put the ended time
  * before the row's own `startedAt`, it is clamped up to `startedAt` (a
- * zero-length session) rather than producing a negative duration — this
- * never throws.
+ * zero-length session) rather than producing a negative duration; if
+ * `nativeStopped.durationMs` is absent, it falls back to the (also clamped)
+ * wall-clock span. Neither path ever throws.
  */
 export function classifyPendingSessions(
   pending: SleepSession[],
-  status: RecorderStatus | { recording: false },
-  nativeStopped?: { sessionId?: string; endedAtMs?: number; interrupted?: boolean }
+  status: RecorderStatus,
+  nativeStopped?: { sessionId?: string; endedAtMs?: number; durationMs?: number; interrupted?: boolean }
 ): PendingClassification {
   let live: SleepSession | null = null;
   const finalize: PendingClassification['finalize'] = [];
@@ -133,9 +139,8 @@ export function classifyPendingSessions(
       continue;
     }
 
-    // Only 'recording' rows remain — 'analyzed' is excluded by definition of
-    // "pending", and 'failed' rows need no further recovery.
-    if (status.recording && 'sessionId' in status && status.sessionId === session.id) {
+    // Only 'recording' rows remain per this function's `pending` precondition.
+    if (status.phase === 'recording' && status.sessionId === session.id) {
       live = session;
       continue;
     }
@@ -146,7 +151,10 @@ export function classifyPendingSessions(
         nativeStopped.endedAtMs !== undefined
           ? Math.max(nativeStopped.endedAtMs, startedAtMs)
           : startedAtMs;
-      finalize.push({ session, endedAtMs, interrupted: nativeStopped.interrupted ?? false });
+      const wallClockMs = Math.max(0, endedAtMs - startedAtMs);
+      const durationMs =
+        nativeStopped.durationMs !== undefined ? Math.max(0, nativeStopped.durationMs) : wallClockMs;
+      finalize.push({ session, endedAtMs, durationMs, interrupted: nativeStopped.interrupted ?? false });
       continue;
     }
 

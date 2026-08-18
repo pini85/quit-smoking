@@ -53,9 +53,11 @@ async function stop(): Promise<RecorderStopResult> {
 async function getStatus(): Promise<RecorderStatus> {
   const status = await SnoreMonitor.getStatus();
   return {
-    recording: status.phase === 'recording',
+    phase: status.phase,
     sessionId: status.sessionId,
     startedAtMs: status.startedAt,
+    endedAtMs: status.endedAt,
+    interrupted: status.interrupted,
   };
 }
 

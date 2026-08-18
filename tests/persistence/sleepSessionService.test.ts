@@ -11,7 +11,7 @@ import type {
   RecorderStopResult,
   SleepRecorder,
 } from '@/lib/recorder/types';
-import { MAX_CLIPS_PER_NIGHT, CLIP_PADDING_MS } from '@/domain/snore/constants';
+import { MAX_CLIPS_PER_NIGHT, CLIP_PADDING_MS, MIN_ANALYZABLE_MS } from '@/domain/snore/constants';
 import { toLocalIso } from '@/lib/utils/iso';
 import { makeFrames } from '../domain/helpers/snoreFrames';
 
@@ -45,16 +45,30 @@ function makeRow(overrides: Partial<SleepSession> = {}): SleepSession {
   };
 }
 
+// A real (non-empty) set of feature frames with no qualifying snore
+// events — a genuine "quiet night", DISTINCT from zero frames (which means
+// nothing decoded at all; see the dedicated zero-frames test below).
+const QUIET_SILENCE = { dbfs: -50, lowBandRatio: 0.2, midBandRatio: 0.2 };
+function quietFrames(totalMs = 2000) {
+  return makeFrames({ hopMs: 100, totalMs, silence: QUIET_SILENCE });
+}
+
 /**
- * A minimal, fully in-control `SleepRecorder` fake. `recording` mirrors
- * native's own liveness state; `lastStopped` mirrors native's memory of the
- * most recently stopped session (available even once `recording` is null,
- * matching `NOT_RECORDING`'s "no active/LAST session" doc — see
- * `sleepSessionLifecycle.ts`'s `classifyPendingSessions` doc).
+ * A minimal, fully in-control `SleepRecorder` fake modeling the native
+ * plugin's three-phase status (`idle` | `recording` | `stopped`):
+ * - `recording` mirrors an in-progress session.
+ * - `stopped` mirrors native's memory of a session it already stopped but
+ *   that hasn't been claimed (finalized) yet — what `getStatus()` reports
+ *   as `phase: 'stopped'`. Recovery claims it by calling `stop()`, which
+ *   consumes (clears) it and hands back the full result.
+ * - `claimError`, when set, makes that claim attempt reject instead of
+ *   succeeding (`stopped` is left in place) — simulates a transient bridge
+ *   error during recovery's claim step.
  */
 class FakeRecorder implements SleepRecorder {
   recording: { sessionId: string; startedAtMs: number } | null = null;
-  lastStopped: RecorderStopResult | null = null;
+  stopped: RecorderStopResult | null = null;
+  claimError: unknown = null;
   stopDurationMs = 3_600_000;
   featuresBySession = new Map<string, unknown[]>();
   getFeaturesError = new Map<string, unknown>();
@@ -86,10 +100,14 @@ class FakeRecorder implements SleepRecorder {
         interrupted: false,
       };
       this.recording = null;
-      this.lastStopped = result;
       return result;
     }
-    if (this.lastStopped) return this.lastStopped;
+    if (this.stopped) {
+      if (this.claimError) throw this.claimError;
+      const result = this.stopped;
+      this.stopped = null;
+      return result;
+    }
     const err = new Error('NOT_RECORDING: no active/last session to act on') as Error & { code: string };
     err.code = 'NOT_RECORDING';
     throw err;
@@ -97,9 +115,17 @@ class FakeRecorder implements SleepRecorder {
 
   getStatus = vi.fn(async (): Promise<RecorderStatus> => {
     if (this.recording) {
-      return { recording: true, sessionId: this.recording.sessionId, startedAtMs: this.recording.startedAtMs };
+      return { phase: 'recording', sessionId: this.recording.sessionId, startedAtMs: this.recording.startedAtMs };
     }
-    return { recording: false };
+    if (this.stopped) {
+      return {
+        phase: 'stopped',
+        sessionId: this.stopped.sessionId,
+        endedAtMs: this.stopped.endedAtMs,
+        interrupted: this.stopped.interrupted,
+      };
+    }
+    return { phase: 'idle' };
   });
 
   getFeatures = vi.fn(async (sessionId: string) => {
@@ -205,7 +231,7 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
   it('happy path: persists the analyzed row BEFORE telling the recorder to delete the audio', async () => {
     const { service, recorder, store } = await makeHarness();
     const started = await service.startMonitoring(NOW);
-    recorder.featuresBySession.set(started.id, []);
+    recorder.featuresBySession.set(started.id, quietFrames());
 
     const order: string[] = [];
     const originalUpdate = store.updateSleepSession.bind(store);
@@ -225,10 +251,37 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
   });
 
+  it('zero feature frames mark the row "failed" (never a fabricated "analyzed" quiet night) and never call deleteRecording', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const started = await service.startMonitoring(NOW);
+    recorder.featuresBySession.set(started.id, []); // nothing decoded at all
+
+    const result = await service.stopMonitoring(NOW);
+
+    expect(result?.state).toBe('failed');
+    expect(result?.events).toBeUndefined();
+    expect(recorder.deleteRecording).not.toHaveBeenCalled();
+    expect(store.getSnapshot().sleepSessions[0].state).toBe('failed');
+  });
+
+  it('a recording well under MIN_ANALYZABLE_MS still becomes "analyzed" with its real (short) duration stored', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const started = await service.startMonitoring(NOW);
+    recorder.featuresBySession.set(started.id, quietFrames(2000));
+    recorder.stopDurationMs = 60_000; // 1 minute, far below MIN_ANALYZABLE_MS
+    expect(recorder.stopDurationMs).toBeLessThan(MIN_ANALYZABLE_MS);
+
+    const result = await service.stopMonitoring(NOW);
+
+    expect(result?.state).toBe('analyzed');
+    expect(result?.metrics?.recordingDurationMs).toBe(60_000);
+    expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
+  });
+
   it('double-stop is a no-op: the second call returns null without calling recorder.stop() again', async () => {
     const { service, recorder } = await makeHarness();
     const started = await service.startMonitoring(NOW);
-    recorder.featuresBySession.set(started.id, []);
+    recorder.featuresBySession.set(started.id, quietFrames());
 
     const first = await service.stopMonitoring(NOW);
     expect(first).not.toBeNull();
@@ -253,7 +306,7 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
 
     // Retry: the transient error clears, analysis now succeeds.
     recorder.getFeaturesError.delete(started.id);
-    recorder.featuresBySession.set(started.id, []);
+    recorder.featuresBySession.set(started.id, quietFrames());
     const rowBeforeRetry = store.getSnapshot().sleepSessions[0];
     const retried = await service.analyzeSession(rowBeforeRetry);
 
@@ -279,12 +332,11 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     const { service, recorder } = harness;
     const started = await service.startMonitoring(NOW);
 
-    const QUIET = { dbfs: -50, lowBandRatio: 0.2, midBandRatio: 0.2 };
     const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
     const frames = makeFrames({
       hopMs: 100,
       totalMs: 20_000,
-      silence: QUIET,
+      silence: QUIET_SILENCE,
       bursts: [
         { startMs: 5000, durationMs: 1000, ...RHYTHMIC },
         { startMs: 9000, durationMs: 1000, ...RHYTHMIC },
@@ -312,12 +364,11 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     };
     const started = await service.startMonitoring(NOW);
 
-    const QUIET = { dbfs: -50, lowBandRatio: 0.2, midBandRatio: 0.2 };
     const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
     const frames = makeFrames({
       hopMs: 100,
       totalMs: 20_000,
-      silence: QUIET,
+      silence: QUIET_SILENCE,
       bursts: [
         { startMs: 5000, durationMs: 1000, ...RHYTHMIC },
         { startMs: 9000, durationMs: 1000, ...RHYTHMIC },
@@ -349,7 +400,6 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     };
     const started = await service.startMonitoring(NOW);
 
-    const QUIET = { dbfs: -50, lowBandRatio: 0.2, midBandRatio: 0.2 };
     const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
     const RUN_SPACING = 25_000;
     const RUN_COUNT = MAX_CLIPS_PER_NIGHT + 2; // more events than the cap allows
@@ -365,7 +415,7 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
       );
     }
     const totalMs = 1000 + (RUN_COUNT - 1) * RUN_SPACING + 9000 + 5000;
-    const frames = makeFrames({ hopMs: 100, totalMs, silence: QUIET, bursts });
+    const frames = makeFrames({ hopMs: 100, totalMs, silence: QUIET_SILENCE, bursts });
     recorder.featuresBySession.set(started.id, frames);
     recorder.cutClipsResult = Array.from({ length: MAX_CLIPS_PER_NIGHT }, (_, i) => ({
       id: String(i),
@@ -381,6 +431,44 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     // The very first event's onset is at 1000ms; padding would go negative
     // (1000 - 1500 = -500) and must clamp to 0.
     expect(clips[0].startMs).toBe(0);
+  });
+
+  it('clamps the right-padding at the recording duration when an event ends near that boundary', async () => {
+    const harness = await makeHarness();
+    const { service, recorder } = harness;
+    harness.preferences = {
+      id: 'singleton',
+      theme: 'system',
+      showEmergingEvidence: true,
+      keepSnoreClips: true,
+      updatedAt: NOW.toISOString(),
+    };
+    const started = await service.startMonitoring(NOW);
+
+    const RHYTHMIC = { dbfs: -35, lowBandRatio: 0.7, midBandRatio: 0.1 };
+    const frames = makeFrames({
+      hopMs: 100,
+      totalMs: 20_000,
+      silence: QUIET_SILENCE,
+      bursts: [
+        { startMs: 5000, durationMs: 1000, ...RHYTHMIC },
+        { startMs: 9000, durationMs: 1000, ...RHYTHMIC },
+        { startMs: 13000, durationMs: 1000, ...RHYTHMIC }, // event ends at 14000ms
+      ],
+    });
+    recorder.featuresBySession.set(started.id, frames);
+    recorder.cutClipsResult = [{ id: '0', path: '/clips/0.m4a' }];
+    // Recording duration (14_500ms) is short of endMs + CLIP_PADDING_MS
+    // (14000 + 1500 = 15500ms) — the right-padding must clamp down to the
+    // duration rather than reaching past the actual recorded audio.
+    recorder.stopDurationMs = 14_500;
+
+    const result = await service.stopMonitoring(NOW);
+
+    expect(recorder.cutClips).toHaveBeenCalledTimes(1);
+    const [, clips] = recorder.cutClips.mock.calls[0] as [string, ClipRange[]];
+    expect(clips[0].endMs).toBe(14_500);
+    expect(result?.metrics?.recordingDurationMs).toBe(14_500);
   });
 });
 
@@ -398,26 +486,28 @@ describe('SleepSessionService.recoverOnLaunch', () => {
     expect(store.getSnapshot().sleepSessions[0].state).toBe('recording');
   });
 
-  it('finalizes and analyzes a pending row whose native session already stopped (interrupted)', async () => {
+  it('finalizes and analyzes a pending row whose native session already stopped (interrupted), carrying the real decodable durationMs — not the wall-clock span', async () => {
     const { service, recorder, store } = await makeHarness();
     const row = makeRow({ id: 'sess-stopped', state: 'recording' });
     await store.addSleepSession(row);
     const startedAtMs = new Date(row.startedAt).getTime();
-    recorder.lastStopped = {
+    recorder.stopped = {
       sessionId: 'sess-stopped',
       startedAtMs,
-      endedAtMs: startedAtMs + 3_600_000,
-      durationMs: 3_600_000,
+      endedAtMs: startedAtMs + 3_600_000, // 1h wall-clock span
+      durationMs: 3_000_000, // only 50min actually decoded (interrupted)
       interrupted: true,
     };
-    recorder.featuresBySession.set('sess-stopped', []);
+    recorder.featuresBySession.set('sess-stopped', quietFrames());
 
     const result = await service.recoverOnLaunch(NOW);
 
     expect(result.live).toBeUndefined();
+    expect(recorder.stop).toHaveBeenCalledTimes(1); // claimed exactly once, after status confirmed 'stopped'
     const stored = store.getSnapshot().sleepSessions[0];
     expect(stored.state).toBe('analyzed');
     expect(stored.interrupted).toBe(true);
+    expect(stored.metrics?.recordingDurationMs).toBe(3_000_000);
   });
 
   it('runs a retry analysis pass over pending "recorded" rows', async () => {
@@ -428,39 +518,86 @@ describe('SleepSessionService.recoverOnLaunch', () => {
       endedAt: toLocalIso(new Date('2026-02-01T23:00:00')),
     });
     await store.addSleepSession(row);
-    recorder.featuresBySession.set('sess-recorded', []);
+    recorder.featuresBySession.set('sess-recorded', quietFrames());
 
     await service.recoverOnLaunch(NOW);
 
     expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
   });
 
-  it('marks a pending row with no native knowledge at all as failed, endedAt pinned to startedAt', async () => {
-    const { service, store } = await makeHarness();
+  it('marks a pending row with no native knowledge at all as failed, endedAt pinned to startedAt, without speculatively calling stop()', async () => {
+    const { service, recorder, store } = await makeHarness();
     const row = makeRow({ id: 'sess-lost', state: 'recording' });
     await store.addSleepSession(row);
-    // recorder never recorded and has no lastStopped memory -> NOT_RECORDING.
+    // recorder is idle and has no `stopped` memory at all.
 
     await service.recoverOnLaunch(NOW);
 
+    expect(recorder.stop).not.toHaveBeenCalled();
     const stored = store.getSnapshot().sleepSessions[0];
     expect(stored.state).toBe('failed');
     expect(stored.endedAt).toBe(stored.startedAt);
   });
 
-  it('isolates a retry-analysis failure to that one session, leaving it "recorded" for a future retry', async () => {
-    const { service, recorder, store } = await makeHarness();
+  it('leaves "failed" rows untouched (never resurrected or rewritten on launch)', async () => {
+    const { service, store } = await makeHarness();
     const row = makeRow({
+      id: 'sess-already-failed',
+      state: 'failed',
+      endedAt: toLocalIso(new Date('2026-02-01T22:05:00')),
+    });
+    await store.addSleepSession(row);
+
+    const updateSpy = vi.spyOn(store, 'updateSleepSession');
+    await service.recoverOnLaunch(NOW);
+
+    expect(updateSpy).not.toHaveBeenCalled();
+    expect(store.getSnapshot().sleepSessions).toEqual([row]);
+  });
+
+  it('isolates a transient claim failure to just that session, leaving it "recording" instead of marking it lost', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const row = makeRow({ id: 'sess-unclaimable', state: 'recording' });
+    await store.addSleepSession(row);
+    const startedAtMs = new Date(row.startedAt).getTime();
+    recorder.stopped = {
+      sessionId: 'sess-unclaimable',
+      startedAtMs,
+      endedAtMs: startedAtMs + 3_600_000,
+      durationMs: 3_600_000,
+      interrupted: false,
+    };
+    recorder.claimError = new Error('bridge hiccup');
+
+    await expect(service.recoverOnLaunch(NOW)).resolves.toBeDefined();
+
+    const stored = store.getSnapshot().sleepSessions[0];
+    expect(stored.state).toBe('recording');
+    expect(stored).toEqual(row);
+  });
+
+  it('isolates a retry-analysis failure to just that session: the broken row stays "recorded" while a second row still ends "analyzed"', async () => {
+    const { service, recorder, store } = await makeHarness();
+    const broken = makeRow({
       id: 'sess-broken',
       state: 'recorded',
       endedAt: toLocalIso(new Date('2026-02-01T23:00:00')),
     });
-    await store.addSleepSession(row);
+    const ok = makeRow({
+      id: 'sess-ok',
+      state: 'recorded',
+      endedAt: toLocalIso(new Date('2026-02-01T23:00:00')),
+    });
+    await store.addSleepSession(broken);
+    await store.addSleepSession(ok);
     recorder.getFeaturesError.set('sess-broken', new Error('boom'));
+    recorder.featuresBySession.set('sess-ok', quietFrames());
 
     await expect(service.recoverOnLaunch(NOW)).resolves.toBeDefined();
 
-    expect(store.getSnapshot().sleepSessions[0].state).toBe('recorded');
+    const rows = store.getSnapshot().sleepSessions;
+    expect(rows.find((s) => s.id === 'sess-broken')?.state).toBe('recorded');
+    expect(rows.find((s) => s.id === 'sess-ok')?.state).toBe('analyzed');
   });
 });
 

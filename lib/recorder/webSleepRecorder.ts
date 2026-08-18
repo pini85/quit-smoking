@@ -396,8 +396,13 @@ async function stop(): Promise<RecorderStopResult> {
 }
 
 async function getStatus(): Promise<RecorderStatus> {
-  if (!current) return { recording: false };
-  return { recording: true, sessionId: current.sessionId, startedAtMs: current.startedAtMs };
+  // This fake never reports 'stopped': `stop()` below resolves synchronously
+  // with the full result and there is no separate "last stopped, unclaimed"
+  // cache to remember it by (see this file's header doc — in-memory only,
+  // gone on reload). An abandoned web-dev session is simply 'idle' by the
+  // time anyone asks again.
+  if (!current) return { phase: 'idle' };
+  return { phase: 'recording', sessionId: current.sessionId, startedAtMs: current.startedAtMs };
 }
 
 async function getFeatures(sessionId: string): Promise<FeatureFrame[]> {
