@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppData } from '@/lib/hooks/useAppData';
+import { useLocale } from '@/lib/i18n';
+import { LOCALES, type Locale } from '@/domain/types';
 import { showToast } from '@/components/ui/Toast';
 import { toLocalIso } from '@/lib/utils/iso';
 import type { PersonalReason, Preferences, QuitProfile } from '@/domain/types';
@@ -89,9 +91,14 @@ function defaultSoonQuitAt(now: Date, min: Date, max: Date): Date {
  * as a single pathname. Reads and writes happen exclusively in the
  * `finalize` handler (an event handler), never during render.
  */
+// Each language named in itself so a Finnish user onboarding in English can
+// still find their own.
+const NATIVE_NAMES: Record<Locale, string> = { en: 'English', fi: 'Suomi' };
+
 export function WelcomeWizard() {
   const router = useRouter();
   const { store } = useAppData();
+  const { locale, setLocale } = useLocale();
 
   const [mountedAt] = useState(() => new Date());
   const soonMin = mountedAt;
@@ -178,10 +185,14 @@ export function WelcomeWizard() {
         await store.addReason(reason);
       }
 
+      // `finalize` builds the preferences row from scratch, so the language
+      // chosen on step 1 must ride along here or the persisted copy loses it
+      // (the localStorage mirror would mask the loss on this device only).
       const preferences: Preferences = {
         id: 'singleton',
         theme: 'system',
         showEmergingEvidence: true,
+        locale,
         updatedAt: nowIso,
       };
       await store.savePreferences(preferences);
@@ -222,8 +233,29 @@ export function WelcomeWizard() {
 
   return (
     <div className="flex min-h-[calc(100dvh-env(safe-area-inset-top))] flex-col pt-8">
-      <div className="mb-8">
+      <div className="mb-8 flex items-center justify-between gap-3">
         <ProgressDots step={step} total={TOTAL_STEPS} />
+        {step === 1 ? (
+          <div role="radiogroup" aria-label="Language / Kieli" className="flex gap-1">
+            {LOCALES.map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={locale === option}
+                lang={option}
+                onClick={() => setLocale(option)}
+                className={`min-h-8 rounded-button border px-2.5 text-[12px] font-medium ${
+                  locale === option
+                    ? 'border-primary text-ink'
+                    : 'border-border text-ink-muted'
+                }`}
+              >
+                {NATIVE_NAMES[option]}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {step === 1 ? (

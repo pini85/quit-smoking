@@ -7,6 +7,7 @@ import { AchievementsGrid } from '@/components/you/AchievementsGrid';
 import { ProfileSection } from '@/components/you/ProfileSection';
 import { ReasonsSection } from '@/components/you/ReasonsSection';
 import { EquivalentsSection } from '@/components/you/EquivalentsSection';
+import { LanguageSection } from '@/components/you/LanguageSection';
 import { DataSection } from '@/components/you/DataSection';
 import { InstallCard } from '@/components/you/InstallCard';
 import { AboutSection } from '@/components/you/AboutSection';
@@ -53,6 +54,7 @@ export default function YouPage() {
       <ProfileSection profile={profile} store={store} />
       <ReasonsSection reasons={reasons} store={store} />
       <EquivalentsSection profile={profile} preferences={preferences} store={store} />
+      <LanguageSection />
       <DataSection preferences={preferences} cravings={cravings} store={store} now={now} />
       <InstallCard preferences={preferences} store={store} />
       <AboutSection />

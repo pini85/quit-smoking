@@ -1,4 +1,5 @@
 import { common } from './common';
+import { you } from './you';
 
 /**
  * The English dictionary is the schema: `Messages` is inferred from it, and
@@ -8,6 +9,7 @@ import { common } from './common';
  */
 export const en = {
   common,
+  you,
 };
 
 export type Messages = typeof en;
