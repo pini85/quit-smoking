@@ -164,7 +164,7 @@ class RecordingService : Service() {
             return
         }
 
-        sessionDir = File(File(filesDir, "snore/sessions"), sessionId).apply { mkdirs() }
+        sessionDir = sessionDirFor(filesDir, sessionId).apply { mkdirs() }
         activeSegmentIndex = 0
         queuedSegmentIndex = null
         acquireWakeLock()
@@ -529,6 +529,19 @@ class RecordingService : Service() {
         const val ACTION_STOP = "app.unsmoke.snore.action.STOP"
         const val EXTRA_SESSION_ID = "sessionId"
         const val EXTRA_STOP_REASON = "stopReason"
+
+        private const val SESSIONS_DIR_NAME = "snore/sessions"
+
+        /**
+         * The on-disk directory a session's segment files (and, once
+         * extracted, its `features.bin`) live in. Single source of truth
+         * for this path — [SnoreMonitorPlugin.extractFeatures] reuses this
+         * exact function rather than reconstructing the path itself, so the
+         * two components can never drift apart on the directory name.
+         */
+        @JvmStatic
+        fun sessionDirFor(filesDir: File, sessionId: String): File =
+            File(File(filesDir, SESSIONS_DIR_NAME), sessionId)
 
         const val NOTIF_CHANNEL_ID = "snore_monitor"
         private const val NOTIF_ID = 1

@@ -1,8 +1,10 @@
 package app.unsmoke.snore
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import android.os.StatFs
 import androidx.core.content.ContextCompat
 import com.getcapacitor.JSObject
@@ -12,12 +14,19 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
+import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 private const val ALIAS_MICROPHONE = "microphone"
 internal const val ALIAS_NOTIFICATIONS = "notifications"
 private const val MIN_FREE_BYTES = 500L * 1024 * 1024
 private const val STOP_POLL_TIMEOUT_MS = 5_000L
 private const val STOP_POLL_INTERVAL_MS = 50L
+private const val FEATURES_FILE_NAME = "features.bin"
+
+/** Generous safety-net timeout for the extraction wake lock — overnight sessions can be several hours of audio to decode. */
+private const val EXTRACTION_WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
 
 /**
  * Capacitor bridge for the native overnight audio recorder. This is a thin
@@ -37,6 +46,26 @@ private const val STOP_POLL_INTERVAL_MS = 50L
 class SnoreMonitorPlugin : Plugin() {
 
     private lateinit var sessionStore: SessionStore
+
+    /**
+     * Guards `extractFeatures`/`cutClips` (a later task) against running
+     * concurrently — both are potentially long-running decode jobs against
+     * the same session's files, so a second call while one is still in
+     * flight is rejected outright (`ALREADY_PROCESSING`) rather than queued
+     * or run in parallel.
+     */
+    private val processing = AtomicBoolean(false)
+
+    /**
+     * Single dedicated background thread for `extractFeatures`/`cutClips`
+     * work: decoding is too slow to run on Capacitor's shared bridge
+     * task-handler thread (blocking it would stall every other in-flight
+     * plugin call across the whole app, the same reasoning as
+     * `stopActiveRecording`'s dedicated poll thread), and a single thread
+     * (rather than a pool) is all that's needed since [processing] already
+     * only ever allows one job at a time.
+     */
+    private val executor = Executors.newSingleThreadExecutor()
 
     override fun load() {
         super.load()
@@ -228,9 +257,83 @@ class SnoreMonitorPlugin : Plugin() {
         call.resolve(result)
     }
 
+    /**
+     * Decodes every finalized segment of a STOPPED session into
+     * `sessions/<sessionId>/features.bin` and resolves with its path plus
+     * the frozen `hopMs`/`sampleRate` constants (the frame layout is fixed
+     * — see `FeatureMath`/`FeaturesFileWriter` — so these are computed from
+     * those constants, never hardcoded as separate literals that could
+     * drift out of sync).
+     *
+     * Rejects `SESSION_NOT_FOUND` for both kinds of "wrong session"
+     * misuse the frozen TS contract (`lib/native/snoreMonitor.ts`) allows
+     * here: [sessionId] not matching what [SessionStore] currently holds,
+     * AND the store not being in the `'stopped'` phase at all (nothing to
+     * extract from a session that's still recording, or from a completely
+     * idle store) — both mean "no known recording matches this call",
+     * which is exactly what `SESSION_NOT_FOUND` means per that contract's
+     * doc comment. Rejects `ALREADY_PROCESSING` if a previous
+     * `extractFeatures`/`cutClips` call for this plugin instance hasn't
+     * finished yet.
+     */
     @PluginMethod
     fun extractFeatures(call: PluginCall) {
-        call.unimplemented("extractFeatures is not yet implemented")
+        val sessionId = call.getString("sessionId")
+        if (sessionId.isNullOrBlank()) {
+            call.reject("sessionId is required", "INVALID_ARGUMENT")
+            return
+        }
+
+        val status = sessionStore.getStatus()
+        if (status.phase != SessionState.PHASE_STOPPED || status.sessionId != sessionId) {
+            call.reject("No stopped session matches sessionId=$sessionId", "SESSION_NOT_FOUND")
+            return
+        }
+
+        if (!processing.compareAndSet(false, true)) {
+            call.reject("An extraction or clip cut is already running for this session", "ALREADY_PROCESSING")
+            return
+        }
+
+        // Normally already created by RecordingService when the session
+        // started; re-asserted here defensively (a no-op if it already
+        // exists) so FeaturesFileWriter's RandomAccessFile never fails on a
+        // missing parent directory.
+        val sessionDir = RecordingService.sessionDirFor(context.filesDir, sessionId).apply { mkdirs() }
+        val outFile = File(sessionDir, FEATURES_FILE_NAME)
+        val segments = status.segments.map { SegmentInfo(it.file) }
+        val startedAtEpochMs = status.startedAt ?: 0L
+
+        executor.execute {
+            var wakeLock: PowerManager.WakeLock? = null
+            try {
+                wakeLock = acquireExtractionWakeLock()
+                val frameCount = FeatureExtractor.extract(sessionDir, segments, outFile, startedAtEpochMs)
+                call.resolve(
+                    JSObject().apply {
+                        put("featuresPath", outFile.absolutePath)
+                        put("frameCount", frameCount)
+                        put("hopMs", FeatureMath.FRAME_SIZE * 1000 / FeatureMath.SAMPLE_RATE_HZ)
+                        put("sampleRate", FeatureMath.SAMPLE_RATE_HZ)
+                    },
+                )
+            } catch (e: Exception) {
+                // Never log audio content -- only the exception's own
+                // (non-audio) message, e.g. a sample-rate mismatch or a
+                // decode failure reason.
+                call.reject("Feature extraction failed: ${e.message}", "EXTRACTION_FAILED")
+            } finally {
+                wakeLock?.let { if (it.isHeld) it.release() }
+                processing.set(false)
+            }
+        }
+    }
+
+    private fun acquireExtractionWakeLock(): PowerManager.WakeLock {
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val lock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "app.unsmoke:SnoreFeatureExtraction")
+        lock.acquire(EXTRACTION_WAKE_LOCK_TIMEOUT_MS)
+        return lock
     }
 
     @PluginMethod
