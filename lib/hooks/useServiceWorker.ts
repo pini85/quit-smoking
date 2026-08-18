@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isNativePlatform } from '@/lib/native/platform';
+
 export interface UseServiceWorkerResult {
   /** True once a newer worker is installed and parked in `waiting`. */
   updateReady: boolean;
@@ -32,6 +34,10 @@ export function useServiceWorker(): UseServiceWorkerResult {
   const appliedRef = useRef(false);
 
   useEffect(() => {
+    // Under Capacitor the WebView serves local (file-bundled) assets directly;
+    // a registered SW would sit in front of them serving a stale precache
+    // after every `cap sync`, fighting the native app's own asset delivery.
+    if (isNativePlatform()) return;
     if (process.env.NODE_ENV !== 'production') return;
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
 
