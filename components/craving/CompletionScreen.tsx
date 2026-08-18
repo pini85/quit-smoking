@@ -2,11 +2,11 @@
 
 import { useDeferredValue, useState } from 'react';
 import type { Belief, Trigger } from '@/domain/types';
-import { BELIEF_META, TRIGGER_BELIEF_SUGGESTIONS } from '@/data/beliefs';
+import { TRIGGER_BELIEF_SUGGESTIONS, beliefLabel } from '@/data/beliefs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { RingPulse } from '@/components/ui/RingPulse';
-import { interpolate, useMessages } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 
 export type CompletionVariant = 'win' | 'logged';
 
@@ -49,6 +49,7 @@ export function CompletionScreen({
   onDone,
 }: CompletionScreenProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   // RingPulse deliberately never fires on its first render (so that merely
   // mounting an already-celebrated screen stays quiet), which means the
   // celebration has to be armed one commit later. `useDeferredValue`'s
@@ -114,7 +115,7 @@ export function CompletionScreen({
                   onClick={() => onBeliefChange?.(selected ? undefined : id)}
                   className="shrink-0 whitespace-nowrap"
                 >
-                  {BELIEF_META[id].label}
+                  {beliefLabel(id, locale)}
                 </Chip>
               );
             })}

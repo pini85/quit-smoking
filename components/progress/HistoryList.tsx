@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import type { CravingOutcome, CravingSession, Locale } from '@/domain/types';
 import { dateFmt } from '@/lib/i18n/fmt';
 import { interpolate, useLocale, useMessages, type Messages } from '@/lib/i18n';
-import { BELIEF_META } from '@/data/beliefs';
+import { beliefLabel } from '@/data/beliefs';
 import { triggerLabel } from '@/data/triggers';
 import { INTERVENTIONS } from '@/data/interventions';
 import { formatDurationDigital } from '@/domain/time';
@@ -169,7 +169,7 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
             {selected.beliefId ? (
               <DetailRow
                 label={m.progress.history.itPromised}
-                value={BELIEF_META[selected.beliefId].label}
+                value={beliefLabel(selected.beliefId, locale)}
               />
             ) : null}
             <DetailRow

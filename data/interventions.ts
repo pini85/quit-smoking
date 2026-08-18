@@ -2,6 +2,9 @@
  * Content for the 7 craving interrupters ("interventions"). One per kind in v1.
  */
 
+import type { Locale } from '@/domain/types';
+import { FI_INTERVENTIONS, FI_TRUTH_CARDS } from './fi/interventions';
+
 export type InterventionKind =
   | 'breathing'
   | 'urge-surf'
@@ -106,3 +109,17 @@ export const INTERVENTIONS: Intervention[] = [
     requiresTriggerHistory: true,
   },
 ];
+
+/** Localized {title, tagline, prompts} for an intervention; other fields (durationMs, gates) are structural and locale-independent. */
+export function localizedIntervention(
+  id: InterventionKind,
+  locale: Locale = 'en'
+): { title: string; tagline: string; prompts: string[] } {
+  const base = INTERVENTIONS.find((i) => i.id === id) as Intervention;
+  if (locale === 'fi') return FI_INTERVENTIONS[id];
+  return { title: base.title, tagline: base.tagline, prompts: base.prompts };
+}
+
+export function localizedTruthCards(locale: Locale = 'en'): string[] {
+  return locale === 'fi' ? FI_TRUTH_CARDS : TRUTH_CARDS;
+}

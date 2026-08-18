@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import type { CravingSession, Trigger } from '@/domain/types';
-import { INTERVENTIONS, type Intervention, type InterventionKind } from '@/data/interventions';
+import { INTERVENTIONS, localizedIntervention, type InterventionKind } from '@/data/interventions';
 import { alreadyProved } from '@/domain/stats/cravingStats';
 import { pickInterventions } from '@/lib/services/interventionPicker';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { useMessages } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 
 export type InterrupterStepProps = {
   intensity: number;
@@ -20,10 +20,6 @@ export type InterrupterStepProps = {
   roundCount: number;
   onStart: (kind: InterventionKind) => void;
 };
-
-function byId(kind: InterventionKind): Intervention {
-  return INTERVENTIONS.find((i) => i.id === kind) as Intervention;
-}
 
 /**
  * Step 2 — the chooser. Two taps from opening the app to doing something
@@ -43,6 +39,7 @@ export function InterrupterStep({
   onStart,
 }: InterrupterStepProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const [showMore, setShowMore] = useState(false);
 
   const { primary, alternative } = useMemo(
@@ -69,8 +66,8 @@ export function InterrupterStep({
     });
   }, [primary, alternative, reasonsCount, sessions, trigger]);
 
-  const primaryIntervention = byId(primary);
-  const alternativeIntervention = byId(alternative);
+  const primaryIntervention = localizedIntervention(primary, locale);
+  const alternativeIntervention = localizedIntervention(alternative, locale);
 
   return (
     <div className="flex min-h-[80dvh] flex-col">
@@ -111,7 +108,9 @@ export function InterrupterStep({
 
         {showMore ? (
           <div className="animate-fade-in flex flex-col gap-2">
-            {rest.map((intervention) => (
+            {rest.map((intervention) => {
+              const localized = localizedIntervention(intervention.id, locale);
+              return (
               <button
                 key={intervention.id}
                 type="button"
@@ -120,17 +119,18 @@ export function InterrupterStep({
               >
                 <span>
                   <span className="block text-[15px] font-medium text-ink">
-                    {intervention.title}
+                    {localized.title}
                   </span>
                   <span className="block text-[13px] text-ink-faint">
-                    {intervention.tagline}
+                    {localized.tagline}
                   </span>
                 </span>
                 <span aria-hidden="true" className="text-ink-faint">
                   &rarr;
                 </span>
               </button>
-            ))}
+              );
+            })}
           </div>
         ) : rest.length > 0 ? (
           <button

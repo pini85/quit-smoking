@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Belief, BeliefAssessment, CravingSession } from '@/domain/types';
 import type { DataStore } from '@/lib/services/dataStore';
-import { BELIEF_META } from '@/data/beliefs';
+import { beliefPromise } from '@/data/beliefs';
 import { FREEDOM_LESSONS } from '@/data/freedomLessons';
 import { rankExercises } from '@/domain/freedom/lessonPicker';
 import { toLocalIso } from '@/lib/utils/iso';
@@ -11,7 +11,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { Button } from '@/components/ui/Button';
 import { SourceBadge } from '@/components/ui/SourceBadge';
 import { showToast } from '@/components/ui/Toast';
-import { interpolate, useMessages } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { ConvictionRow } from './ConvictionRow';
 
 export type ExerciseSheetProps = {
@@ -55,6 +55,7 @@ export function ExerciseSheet({
   onClose,
 }: ExerciseSheetProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const [saving, setSaving] = useState(false);
   const startedAtRef = useRef<string | null>(null);
   // Latches once the session row is committed, so a retry after a FAILED
@@ -126,7 +127,7 @@ export function ExerciseSheet({
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[13px] leading-relaxed text-ink-faint">
             {interpolate(m.freedom.exercise.promiseLabel, {
-              promise: BELIEF_META[beliefId].promise,
+              promise: beliefPromise(beliefId, locale),
             })}
           </p>
 

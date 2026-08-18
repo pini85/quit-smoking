@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react';
 import type { Belief, BeliefAssessment } from '@/domain/types';
-import { BELIEF_META } from '@/data/beliefs';
+import { beliefPromise } from '@/data/beliefs';
 import { beliefGroups, beliefTrend, type BeliefGroupKey } from '@/domain/freedom/beliefState';
 import { Card } from '@/components/ui/Card';
-import { useMessages, type Messages } from '@/lib/i18n';
+import { useLocale, useMessages, type Messages } from '@/lib/i18n';
 
 export type BeliefMapProps = {
   assessments: BeliefAssessment[];
@@ -42,6 +42,7 @@ const SECTIONS: { key: BeliefGroupKey; headingKey: keyof Messages['freedom']['ma
 
 export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const groups = useMemo(() => beliefGroups(assessments), [assessments]);
   const trends = useMemo(() => {
     const byBelief = new Map<Belief, boolean>();
@@ -92,7 +93,7 @@ export function BeliefMap({ assessments, onOpenBelief }: BeliefMapProps) {
                       <span
                         className={`text-[14px] leading-snug ${seenThrough ? 'text-primary-strong' : 'text-ink'}`}
                       >
-                        &ldquo;{BELIEF_META[belief].promise}&rdquo;
+                        &ldquo;{beliefPromise(belief, locale)}&rdquo;
                       </span>
                       {trends.get(belief) === true ? (
                         <span className="text-[12px] leading-snug text-ink-faint">

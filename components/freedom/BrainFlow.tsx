@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Belief, Trigger } from '@/domain/types';
-import { BELIEF_META, BELIEF_ORDER, TRIGGER_BELIEF_SUGGESTIONS } from '@/data/beliefs';
-import { BRAIN_RESPONSES } from '@/data/brainResponses';
+import { BELIEF_ORDER, TRIGGER_BELIEF_SUGGESTIONS, beliefPromise } from '@/data/beliefs';
+import { BRAIN_RESPONSES, brainResponseLines } from '@/data/brainResponses';
+import { FI_UNNAMED_RESPONSE } from '@/data/fi/unnamedResponse';
 import { proofLine } from '@/domain/freedom/evidence';
 import { perTriggerStats } from '@/domain/stats/cravingStats';
 import { daysSinceEpoch } from '@/domain/time';
@@ -115,10 +116,9 @@ export function BrainFlow() {
   const visibleBeliefs = showAll ? orderedBeliefs : orderedBeliefs.slice(0, VISIBLE_PROMISES);
 
   const response = belief === null ? null : BRAIN_RESPONSES[belief];
-  const line =
-    response === null
-      ? UNNAMED_RESPONSE[dayIndex % UNNAMED_RESPONSE.length]
-      : response.lines[dayIndex % response.lines.length];
+  const unnamed = locale === 'fi' ? FI_UNNAMED_RESPONSE : UNNAMED_RESPONSE;
+  const lines = belief === null ? null : brainResponseLines(belief, locale);
+  const line = lines === null ? unnamed[dayIndex % unnamed.length] : lines[dayIndex % lines.length];
   // Only the grounded form earns the proof box. `proofLine` still answers below
   // its >= 3 gate, but with a neutral placeholder line rather than evidence —
   // and a box saying nothing in particular reads as a claim that failed to
@@ -261,6 +261,7 @@ function PromiseStep({
   onSkipNaming,
 }: PromiseStepProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   return (
     <div className="flex flex-1 flex-col gap-5 pt-6">
       <div>
@@ -287,7 +288,7 @@ function PromiseStep({
               onClick={() => onPick(id)}
               className="min-h-14 rounded-card border border-border bg-surface px-4 py-3 text-left text-[15px] leading-relaxed text-ink transition-transform duration-[var(--dur-press)] active:scale-[0.99]"
             >
-              &ldquo;{BELIEF_META[id].promise}&rdquo;
+              &ldquo;{beliefPromise(id, locale)}&rdquo;
             </button>
           ))}
 
@@ -340,11 +341,12 @@ function ResponseStep({
   onConviction,
 }: ResponseStepProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   return (
     <div className="animate-fade-in flex flex-1 flex-col gap-5 pt-6">
       {belief !== null ? (
         <p className="text-[13px] leading-relaxed text-ink-faint">
-          {interpolate(m.brain.response.promiseLabel, { promise: BELIEF_META[belief].promise })}
+          {interpolate(m.brain.response.promiseLabel, { promise: beliefPromise(belief, locale) })}
         </p>
       ) : null}
 

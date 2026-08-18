@@ -20,7 +20,8 @@
  * components, as with `data/triggers.ts`.
  */
 
-import type { Belief, Trigger } from '@/domain/types';
+import type { Belief, Locale, Trigger } from '@/domain/types';
+import { FI_BELIEF_TEXT } from './fi/beliefs';
 
 /**
  * What kind of promise this is — used to group the belief map. Named after the
@@ -200,6 +201,14 @@ export const BELIEF_META: Record<Belief, BeliefMeta> = {
     sourceKind: 'psych',
   },
 };
+
+export function beliefLabel(belief: Belief, locale: Locale = 'en'): string {
+  return locale === 'fi' ? FI_BELIEF_TEXT[belief].label : BELIEF_META[belief].label;
+}
+
+export function beliefPromise(belief: Belief, locale: Locale = 'en'): string {
+  return locale === 'fi' ? FI_BELIEF_TEXT[belief].promise : BELIEF_META[belief].promise;
+}
 
 /**
  * House order for browsing the whole library (the belief map, the /brain flow

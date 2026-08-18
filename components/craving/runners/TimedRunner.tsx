@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { INTERVENTIONS, type InterventionKind } from '@/data/interventions';
+import { INTERVENTIONS, localizedIntervention, type InterventionKind } from '@/data/interventions';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { useLocale } from '@/lib/i18n';
 import { RunnerChrome } from './RunnerChrome';
 import { UrgeWave } from './UrgeWave';
 
@@ -70,9 +71,10 @@ function promptIndex(
  */
 export function TimedRunner({ kind, sessionId, onComplete, onBack, onSkip }: TimedRunnerProps) {
   const reducedMotion = useReducedMotion();
+  const { locale } = useLocale();
   const intervention = INTERVENTIONS.find((i) => i.id === (kind as InterventionKind));
   const durationMs = intervention?.durationMs ?? 60_000;
-  const prompts = intervention?.prompts ?? [];
+  const prompts = localizedIntervention(kind as InterventionKind, locale).prompts;
 
   const [elapsedMs, setElapsedMs] = useState(0);
 

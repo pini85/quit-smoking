@@ -1,4 +1,5 @@
-import type { MilestoneCategory } from '@/domain/types';
+import type { Locale, MilestoneCategory } from '@/domain/types';
+import { FI_CATEGORY_LABELS } from '@/data/fi/categoryMeta';
 
 /**
  * Display metadata for the 20 milestone categories. Lives under
@@ -27,5 +28,9 @@ export const CATEGORY_META: Record<MilestoneCategory, { label: string; emoji: st
   freedom: { label: 'Freedom', emoji: '🕊️' },
   longevity: { label: 'Longevity', emoji: '⏳' },
 };
+
+export function categoryLabel(category: MilestoneCategory, locale: Locale = 'en'): string {
+  return locale === 'fi' ? FI_CATEGORY_LABELS[category] : CATEGORY_META[category].label;
+}
 
 export default CATEGORY_META;

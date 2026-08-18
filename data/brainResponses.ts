@@ -23,7 +23,8 @@
  * Pure data: no React, no clock, no emoji.
  */
 
-import type { Belief } from '@/domain/types';
+import type { Belief, Locale } from '@/domain/types';
+import { FI_BRAIN_RESPONSES } from './fi/brainResponses';
 
 export interface BrainResponse {
   /** 2–3 interchangeable variants, each a complete answer on its own. */
@@ -168,3 +169,11 @@ export const BRAIN_RESPONSES: Record<Belief, BrainResponse> = {
     ],
   },
 };
+
+/**
+ * Localized response lines for a belief, same length/index as the English
+ * `lines` array (rotation parity — see `data/fi/brainResponses.ts`).
+ */
+export function brainResponseLines(belief: Belief, locale: Locale = 'en'): string[] {
+  return locale === 'fi' ? FI_BRAIN_RESPONSES[belief] : BRAIN_RESPONSES[belief].lines;
+}
