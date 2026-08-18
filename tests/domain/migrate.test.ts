@@ -320,8 +320,12 @@ describe('migrateToLatest — v1 -> v2', () => {
 
 describe('migrateToLatest — v2 -> v3', () => {
   it('adds exactly the one new collection (empty) and bumps the version', () => {
+    // Exercises MIGRATIONS[2] in isolation, one step at a time — unlike
+    // `migrateToLatest`, which walks all the way to CURRENT_EXPORT_VERSION
+    // and would silently stop catching this once v2 is more than one step
+    // behind HEAD (the exact test-rot the v1 -> v2 block above hit).
     const v2 = validV2({ cravings: [{ id: 'c1' }], beliefAssessments: [{ id: 'ba1' }] });
-    const migrated = migrateToLatest(v2);
+    const migrated = MIGRATIONS[2](v2);
 
     expect(migrated.schemaVersion).toBe(3);
     expect(migrated.sleepSessions).toEqual([]);
@@ -337,7 +341,7 @@ describe('migrateToLatest — v2 -> v3', () => {
   it('does not mutate the input file', () => {
     const v2 = validV2();
     const clone = JSON.parse(JSON.stringify(v2));
-    migrateToLatest(v2);
+    MIGRATIONS[2](v2);
     expect(v2).toEqual(clone);
   });
 
