@@ -3,6 +3,7 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -10,7 +11,15 @@
         android:theme="@style/AppTheme">
         <!-- allowBackup is deliberately false: overnight snore audio (and
              SessionStore's SharedPreferences metadata about it) must never
-             ride Android's cloud auto-backup. -->
+             ride Android's cloud auto-backup.
+
+             dataExtractionRules is kept alongside it as defense in depth, not
+             as a replacement: it names files/snore/ and the snore_session
+             SharedPreferences as excluded from BOTH cloud backup and
+             device-to-device transfer (the latter is not governed by
+             allowBackup at all), so the audio stays out even if this blanket
+             opt-out is ever flipped. See the rules file for the full
+             reasoning. -->
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"

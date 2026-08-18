@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Defense in depth behind android:allowBackup="false".
+
+  allowBackup="false" already opts this app out of Android's cloud auto-backup
+  entirely, so on its own these rules change nothing today. They exist because
+  allowBackup is a single attribute one edit away from being flipped (a
+  Capacitor regeneration of AndroidManifest.xml, a future "let people restore
+  their quit date on a new phone" change), and the thing that would silently
+  ride along is overnight bedroom audio. Naming the exclusions here means the
+  snore data stays excluded even if the blanket opt-out goes away.
+
+  Both transfer paths are covered deliberately: device-transfer (direct
+  device-to-device migration, which is NOT governed by allowBackup and is
+  opt-in by default from API 31) is the one that would otherwise copy a night
+  of audio to a new phone over a cable.
+
+  What is excluded:
+   - files/snore/  the segment recordings, features.bin, and cut clips
+                   (RecordingService.SESSIONS_DIR_NAME / the clips dir).
+   - snore_session.xml  SessionStore's SharedPreferences (SessionStore.PREFS_NAME
+                   + ".xml") — session ids, timings and segment file paths.
+                   Metadata, but metadata about exactly the audio above, and
+                   restoring it onto a device whose files did not come along
+                   would also point the recorder at segments that do not exist.
+
+  Nothing else is listed: no <include> is present, so these rules are
+  exclusions layered on the default "everything else" behaviour, which is what
+  keeps this file from becoming a second, drifting inventory of app data.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="snore/" />
+        <exclude domain="sharedpref" path="snore_session.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="snore/" />
+        <exclude domain="sharedpref" path="snore_session.xml" />
+    </device-transfer>
+</data-extraction-rules>
