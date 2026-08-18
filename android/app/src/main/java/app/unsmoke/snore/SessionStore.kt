@@ -84,6 +84,20 @@ class SessionStore(context: Context) {
         state
     }
 
+    /**
+     * Clears the store back to a brand-new `'idle'` state — the terminal
+     * transition out of `'stopped'`, invoked by `deleteSessionAudio` once a
+     * session's on-disk audio has actually been deleted. There is no
+     * dedicated `SessionStateCodec` transition for this (unlike
+     * `startRecording`/`appendSegment`/`stop`): going to idle needs no
+     * case-specific logic, writing the shared [SessionState.IDLE] constant
+     * IS the entire transition.
+     */
+    fun clear(): SessionState = synchronized(LOCK) {
+        write(SessionState.IDLE)
+        SessionState.IDLE
+    }
+
     private fun read(): SessionState = SessionStateCodec.parse(prefs.getString(KEY_STATE, null))
 
     private fun write(state: SessionState) {

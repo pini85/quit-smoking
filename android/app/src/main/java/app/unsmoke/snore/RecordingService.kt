@@ -416,7 +416,7 @@ class RecordingService : Service() {
 
     private fun segmentFile(index: Int): File {
         val dir = sessionDir ?: filesDir
-        return File(dir, "seg_%04d.m4a".format(index))
+        return File(dir, segmentFileName(index))
     }
 
     private fun acquireWakeLock() {
@@ -542,6 +542,17 @@ class RecordingService : Service() {
         @JvmStatic
         fun sessionDirFor(filesDir: File, sessionId: String): File =
             File(File(filesDir, SESSIONS_DIR_NAME), sessionId)
+
+        /**
+         * The on-disk file name of segment [index] within a session
+         * directory (built by [sessionDirFor]). Single source of truth for
+         * this naming convention — [ClipCutter] reuses this exact function
+         * to resolve a [ClipSlice.segmentIndex] back to a real file, rather
+         * than re-deriving the "seg_%04d.m4a" format itself, so the two
+         * can never drift apart.
+         */
+        @JvmStatic
+        fun segmentFileName(index: Int): String = "seg_%04d.m4a".format(index)
 
         const val NOTIF_CHANNEL_ID = "snore_monitor"
         private const val NOTIF_ID = 1

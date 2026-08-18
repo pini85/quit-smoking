@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.StatFs
 import androidx.core.content.ContextCompat
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
@@ -17,6 +18,7 @@ import com.getcapacitor.annotation.Permission
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import org.json.JSONException
 
 private const val ALIAS_MICROPHONE = "microphone"
 internal const val ALIAS_NOTIFICATIONS = "notifications"
@@ -24,6 +26,21 @@ private const val MIN_FREE_BYTES = 500L * 1024 * 1024
 private const val STOP_POLL_TIMEOUT_MS = 5_000L
 private const val STOP_POLL_INTERVAL_MS = 50L
 private const val FEATURES_FILE_NAME = "features.bin"
+private const val CLIPS_DIR_NAME = "snore/clips"
+
+/**
+ * Allowed characters for a clip id (`cutClips`) or a `deleteSessionAudio`
+ * sessionId: used verbatim as a path segment under `filesDir`, so this
+ * whitelist is what makes path traversal via those ids impossible (`..`,
+ * `/`, null bytes, etc. all fail this match and are rejected outright,
+ * never sanitized/stripped down to something "safe").
+ */
+private val SAFE_ID_PATTERN = Regex("^[A-Za-z0-9_-]+$")
+
+private fun isSafeId(id: String): Boolean = SAFE_ID_PATTERN.matches(id)
+
+/** One parsed `cutClips` request-array entry, session-relative-ms range plus the caller-supplied output id. */
+private data class ClipRequest(val id: String, val startMs: Long, val endMs: Long)
 
 /** Generous safety-net timeout for the extraction wake lock — overnight sessions can be several hours of audio to decode. */
 private const val EXTRACTION_WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
@@ -336,20 +353,197 @@ class SnoreMonitorPlugin : Plugin() {
         return lock
     }
 
+    /**
+     * Cuts each requested `[startMs, endMs)` session-relative range out of a
+     * STOPPED session's segments into its own standalone `.m4a` file under
+     * `filesDir/snore/clips/<sessionId>/<id>.m4a`. Shares [processing] and
+     * [executor] with [extractFeatures] — see their docs — since both are
+     * long-running decode/mux jobs against the same session's files and must
+     * never run concurrently with each other.
+     *
+     * Rejects `SESSION_NOT_FOUND` (session must be `'stopped'` and match
+     * [sessionId]) and `ALREADY_PROCESSING`, exactly like [extractFeatures].
+     * Each `clips[].id` is validated against [isSafeId] BEFORE any work
+     * starts (and before [processing] is even claimed) — an invalid id
+     * rejects the whole call with `INVALID_ARGUMENT` rather than silently
+     * dropping just that one entry, since it is caller-side malformed input,
+     * not a legitimate "this range doesn't exist" case. A range that
+     * [ClipMapper.mapRange] maps to `null` (out of bounds / collapses to
+     * zero-length after clamping) is different: that IS a legitimate outcome
+     * for an otherwise well-formed request, so it is simply omitted from the
+     * resolved `clips` array rather than failing the call.
+     */
     @PluginMethod
     fun cutClips(call: PluginCall) {
-        call.unimplemented("cutClips is not yet implemented")
+        val sessionId = call.getString("sessionId")
+        if (sessionId.isNullOrBlank()) {
+            call.reject("sessionId is required", "INVALID_ARGUMENT")
+            return
+        }
+
+        val status = sessionStore.getStatus()
+        if (status.phase != SessionState.PHASE_STOPPED || status.sessionId != sessionId) {
+            call.reject("No stopped session matches sessionId=$sessionId", "SESSION_NOT_FOUND")
+            return
+        }
+
+        val clipsArray = call.getArray("clips")
+        if (clipsArray == null || clipsArray.length() == 0) {
+            call.reject("clips is required", "INVALID_ARGUMENT")
+            return
+        }
+
+        val requests = mutableListOf<ClipRequest>()
+        try {
+            for (i in 0 until clipsArray.length()) {
+                val entry = clipsArray.getJSONObject(i)
+                val id = entry.getString("id")
+                if (!isSafeId(id)) {
+                    call.reject("Invalid clip id (must match [A-Za-z0-9_-]+)", "INVALID_ARGUMENT")
+                    return
+                }
+                requests.add(ClipRequest(id, entry.getLong("startMs"), entry.getLong("endMs")))
+            }
+        } catch (e: JSONException) {
+            call.reject("Malformed clips entry: ${e.message}", "INVALID_ARGUMENT")
+            return
+        }
+
+        if (!processing.compareAndSet(false, true)) {
+            call.reject("An extraction or clip cut is already running for this session", "ALREADY_PROCESSING")
+            return
+        }
+
+        val sessionDir = RecordingService.sessionDirFor(context.filesDir, sessionId)
+        val segments = status.segments.map { SegmentSpan(it.file, it.durationMs) }
+        val clipsDir = File(File(context.filesDir, CLIPS_DIR_NAME), sessionId).apply { mkdirs() }
+
+        executor.execute {
+            var wakeLock: PowerManager.WakeLock? = null
+            try {
+                wakeLock = acquireExtractionWakeLock()
+                val results = JSArray()
+                for (request in requests) {
+                    // Out-of-bounds/zero-length-after-clamping ranges are a
+                    // legitimate outcome, not an error -- skip (omit from
+                    // results) rather than failing the whole batch.
+                    val slice = ClipMapper.mapRange(segments, request.startMs, request.endMs) ?: continue
+                    val outFile = File(clipsDir, "${request.id}.m4a")
+                    ClipCutter.cut(sessionDir, slice, outFile)
+                    results.put(
+                        JSObject().apply {
+                            put("id", request.id)
+                            put("path", outFile.absolutePath)
+                            put("durationMs", slice.durationMs)
+                        },
+                    )
+                }
+                call.resolve(JSObject().apply { put("clips", results) })
+            } catch (e: Exception) {
+                // Never log audio content -- only the exception's own
+                // (non-audio) message and clip/session ids, never paths or
+                // audio bytes.
+                call.reject("Clip cut failed: ${e.message}", "EXTRACTION_FAILED")
+            } finally {
+                wakeLock?.let { if (it.isHeld) it.release() }
+                processing.set(false)
+            }
+        }
     }
 
+    /**
+     * Deletes a STOPPED session's on-disk audio: always the segments +
+     * `features.bin` under `filesDir/snore/sessions/<sessionId>/`, and —
+     * unless [keepClips] is `true` — also `filesDir/snore/clips/<sessionId>/`.
+     * Transitions [sessionStore] to `'idle'` afterward via [SessionStore.clear]
+     * so a subsequent `getStatus()` no longer reports this session at all.
+     *
+     * Runs synchronously on the calling (Capacitor bridge) thread: this is
+     * plain filesystem deletion, not a decode/mux job, so it does not need
+     * [executor]/[processing]/a wake lock the way [extractFeatures]/[cutClips]
+     * do.
+     *
+     * [sessionId] is validated against [isSafeId] like a clip id (same
+     * path-traversal concern: it becomes a path segment under `filesDir`),
+     * and, like [extractFeatures]/[cutClips], must match the currently
+     * stored session (also `'stopped'` — a session's own files must never be
+     * deleted while it is still actively recording) or this rejects
+     * `SESSION_NOT_FOUND`.
+     */
     @PluginMethod
     fun deleteSessionAudio(call: PluginCall) {
-        call.unimplemented("deleteSessionAudio is not yet implemented")
+        val sessionId = call.getString("sessionId")
+        if (sessionId.isNullOrBlank() || !isSafeId(sessionId)) {
+            call.reject("sessionId is required", "INVALID_ARGUMENT")
+            return
+        }
+
+        val status = sessionStore.getStatus()
+        if (status.phase != SessionState.PHASE_STOPPED || status.sessionId != sessionId) {
+            call.reject("No stopped session matches sessionId=$sessionId", "SESSION_NOT_FOUND")
+            return
+        }
+
+        val keepClips = call.getBoolean("keepClips", false) ?: false
+
+        RecordingService.sessionDirFor(context.filesDir, sessionId).deleteRecursively()
+        if (!keepClips) {
+            File(File(context.filesDir, CLIPS_DIR_NAME), sessionId).deleteRecursively()
+        }
+
+        sessionStore.clear()
+        call.resolve()
     }
 
+    /**
+     * Deletes each of [paths] (already-absolute clip file paths, as returned
+     * by [cutClips]). Idempotent: a path that no longer exists is simply
+     * skipped, not an error.
+     *
+     * Every path is canonicalized ([File.canonicalFile], which resolves
+     * `..`/symlinks) and required to fall UNDER `filesDir/snore/clips/`
+     * BEFORE any deletion happens — if even one fails that containment
+     * check, the WHOLE call is rejected `INVALID_PATH` and nothing is
+     * deleted, rather than silently deleting only the valid-looking prefix
+     * of the array. This is the complementary path-traversal guard to
+     * [isSafeId]'s whitelist: [cutClips]/[deleteSessionAudio] construct
+     * paths themselves from short ids, but this call is handed full paths
+     * by the caller, so containment-under-the-clips-root is checked
+     * directly instead.
+     */
     @PluginMethod
     fun deleteClips(call: PluginCall) {
-        call.unimplemented("deleteClips is not yet implemented")
+        val pathsArray = call.getArray("paths")
+        if (pathsArray == null) {
+            call.reject("paths is required", "INVALID_ARGUMENT")
+            return
+        }
+
+        val clipsRoot = File(context.filesDir, CLIPS_DIR_NAME).canonicalFile
+        val targets = mutableListOf<File>()
+        try {
+            for (i in 0 until pathsArray.length()) {
+                val rawPath = pathsArray.getString(i)
+                val canonical = File(rawPath).canonicalFile
+                if (!isUnderDirectory(canonical, clipsRoot)) {
+                    call.reject("Path is not under the clips directory", "INVALID_PATH")
+                    return
+                }
+                targets.add(canonical)
+            }
+        } catch (e: JSONException) {
+            call.reject("Malformed paths entry: ${e.message}", "INVALID_ARGUMENT")
+            return
+        }
+
+        // Missing files are fine here (idempotent) -- delete() simply
+        // returns false for a path that no longer exists.
+        targets.forEach { it.delete() }
+        call.resolve()
     }
+
+    private fun isUnderDirectory(file: File, dir: File): Boolean =
+        file.path.startsWith(dir.path + File.separator)
 
     private fun stopResultOf(status: SessionState): JSObject = JSObject().apply {
         put("sessionId", status.sessionId)

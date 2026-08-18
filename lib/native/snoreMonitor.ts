@@ -16,6 +16,12 @@
  *                        sessionId does not match any known recording
  *  - EXTRACTION_FAILED   extractFeatures — feature extraction could not
  *                        produce a valid features.bin
+ *  - INVALID_ARGUMENT    startRecording / extractFeatures / cutClips /
+ *                        deleteSessionAudio / deleteClips — a required
+ *                        argument is missing or malformed (e.g. a blank
+ *                        sessionId, or a clip id outside [A-Za-z0-9_-]+)
+ *  - INVALID_PATH        deleteClips — a path does not resolve under this
+ *                        app's clip storage directory
  */
 import { registerPlugin } from '@capacitor/core';
 
