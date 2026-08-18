@@ -102,6 +102,8 @@ export const sleep = {
   history: {
     title: 'Sleep history',
     failed: 'Analysis failed',
+    notAnalyzed: 'Not analyzed yet',
+    unfinished: 'Recording never finished',
     interrupted: 'Interrupted',
     delete: 'Delete this night',
     deleteAll: 'Delete all snoring data',

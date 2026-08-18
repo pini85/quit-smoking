@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { SleepSession } from '@/domain/types';
-import { hoursBetween } from '@/domain/time';
 import { computeSnoreTrends } from '@/domain/snore/trends';
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useSleepRecorder } from '@/lib/hooks/useSleepRecorder';
 import { useNow } from '@/lib/hooks/useNow';
+import { onAppResume } from '@/lib/native/platform';
 import type { RecorderStatus } from '@/lib/recorder/types';
 import { useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { deriveView } from './deriveView';
 import { buildSleepSessionService } from './sleepService';
 import { PreSleepCard } from './PreSleepCard';
 import { ActiveMonitoringCard } from './ActiveMonitoringCard';
@@ -39,71 +39,6 @@ function LoadingHero() {
 }
 
 /**
- * How long a finished night keeps the hero slot as `MorningResults` before
- * automatically reverting to `PreSleepCard`. Anchored to `endedAt` (falling
- * back to `startedAt` for a 'failed' row that never got one) rather than a
- * calendar-day boundary: a session that starts at 23:18 and ends at 07:00
- * has "yesterday's" `startedAt` but should still show its results all
- * morning, and a 00:30 session must not pin results in place until midnight
- * with no way to start tonight's recording. 12h comfortably covers "the
- * rest of the day this night ended on" for any normal sleep schedule.
- *
- * Auto-reverting (rather than also adding a Start affordance inside
- * `MorningResults`) is the deliberate choice here: the hero stays a strict
- * one-card state machine, Start only ever lives on `PreSleepCard`, and
- * last night's numbers remain visible regardless via `SleepHistoryList`/
- * `SleepTrendSection` below.
- */
-const RESULTS_WINDOW_HOURS = 12;
-
-function withinResultsWindow(session: SleepSession, now: Date): boolean {
-  const anchor = new Date(session.endedAt ?? session.startedAt);
-  return hoursBetween(anchor, now) < RESULTS_WINDOW_HOURS;
-}
-
-type SleepView =
-  | { phase: 'loading' }
-  | { phase: 'pre-sleep' }
-  | { phase: 'active'; startedAtMs: number }
-  | { phase: 'analyzing'; session: SleepSession }
-  | { phase: 'results'; session: SleepSession };
-
-/**
- * Derives which single hero card to show from native truth (`nativeStatus`,
- * refreshed at mount and after start/stop) plus the latest stored row —
- * never from recomputing recovery/adoption logic, which is entirely
- * `SleepRecovery`'s job elsewhere. See `RESULTS_WINDOW_HOURS` for how long a
- * finished night holds the 'results' slot before reverting to 'pre-sleep'.
- */
-function deriveView(nativeStatus: RecorderStatus | null, sessions: SleepSession[], now: Date): SleepView {
-  if (nativeStatus === null) return { phase: 'loading' };
-
-  if (nativeStatus.phase === 'recording') {
-    const session = sessions.find((s) => s.id === nativeStatus.sessionId);
-    const startedAtMs =
-      nativeStatus.startedAtMs ?? (session ? new Date(session.startedAt).getTime() : now.getTime());
-    return { phase: 'active', startedAtMs };
-  }
-
-  const sorted = [...sessions].sort(
-    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-  );
-  const latest = sorted[0];
-
-  if (latest && (latest.state === 'recording' || latest.state === 'recorded')) {
-    return { phase: 'analyzing', session: latest };
-  }
-  if (
-    latest &&
-    (latest.state === 'analyzed' || latest.state === 'failed') &&
-    withinResultsWindow(latest, now)
-  ) {
-    return { phase: 'results', session: latest };
-  }
-  return { phase: 'pre-sleep' };
-}
-
-/**
  * /sleep — a single state-machine hero (pre-sleep tips, active monitoring,
  * analyzing/retry, or last night's results) plus the always-on trend and
  * history sections below it, which keep showing real data (e.g. imported
@@ -117,14 +52,31 @@ export function SleepScreen() {
 
   const [nativeStatus, setNativeStatus] = useState<RecorderStatus | null>(null);
 
+  // Native status is read at mount AND on every native resume. The resume
+  // leg is what keeps a natively-ended session (the notification's Stop
+  // action, an error, low storage) from being rendered as still live while
+  // this screen sat in the background: without it the hero would stay stuck
+  // on `ActiveMonitoringCard` for a recording that no longer exists. Mirrors
+  // `SleepRecovery`'s own mount + `onAppResume` pairing, which is what
+  // actually finalizes/analyzes such a session.
   useEffect(() => {
     if (!ready || recorder === null) return;
     let cancelled = false;
-    void recorder.getStatus().then((status) => {
-      if (!cancelled) setNativeStatus(status);
-    });
+    const read = () => {
+      void recorder
+        .getStatus()
+        .then((status) => {
+          if (!cancelled) setNativeStatus(status);
+        })
+        .catch((error: unknown) => {
+          console.error('Unsmoke: failed to read the native recorder status', error);
+        });
+    };
+    read();
+    const unsubscribe = onAppResume(read);
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [ready, recorder]);
 

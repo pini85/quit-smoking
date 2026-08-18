@@ -19,10 +19,19 @@ export type SleepHistoryListProps = {
   store: DataStore;
 };
 
-const HISTORY_STATES = new Set(['analyzed', 'failed']);
-
-/** One line per finished night, newest first: date, duration + burden, or "Analysis failed". */
+/**
+ * One line per night, newest first: date plus either duration + burden, or an
+ * honest label for a night that has no numbers.
+ *
+ * The two non-terminal states get their own labels rather than borrowing
+ * 'failed'`s: a 'recorded' row's audio is still on the device awaiting
+ * analysis (it may yet succeed, or be stuck — see `deriveView`'s
+ * `ANALYZING_WINDOW_HOURS`), and a 'recording' row is one whose recording
+ * never got finalized. Calling either "Analysis failed" would be a guess.
+ */
 function nightSummary(session: SleepSession, locale: Locale, m: Messages['sleep']['history']): string {
+  if (session.state === 'recording') return m.unfinished;
+  if (session.state === 'recorded') return m.notAnalyzed;
   if (session.state === 'failed' || session.metrics === undefined) return m.failed;
   const duration = formatSleepDuration(session.metrics.recordingDurationMs, locale);
   const burden = numberFmt(locale).format(session.metrics.snoreBurden);
@@ -31,8 +40,15 @@ function nightSummary(session: SleepSession, locale: Locale, m: Messages['sleep'
 }
 
 /**
- * Every analyzed/failed night, most recent first — per-night delete plus a
+ * EVERY stored night, most recent first — per-night delete plus a
  * "Delete all snoring data" action, each behind its own confirm `Sheet`.
+ *
+ * Deliberately not filtered down to analyzed/failed rows: a 'recording' or
+ * 'recorded' row is exactly the row a user most needs a way out of (a
+ * session whose analysis keeps failing, or one the app never finalized), and
+ * it is also the only row that may still have a full night's audio sitting
+ * on the device. Hiding those rows here left them undeletable — this list is
+ * the ONLY per-night delete affordance in the app.
  *
  * Deletion is always available, even when `service` is `null` (no recorder
  * resolved on this device/browser, e.g. production web reviewing nights
@@ -52,10 +68,7 @@ export function SleepHistoryList({ sessions, service, store }: SleepHistoryListP
   const [busy, setBusy] = useState(false);
 
   const nights = useMemo(
-    () =>
-      sessions
-        .filter((s) => HISTORY_STATES.has(s.state))
-        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
+    () => [...sessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
     [sessions]
   );
 

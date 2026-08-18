@@ -100,9 +100,22 @@ export class SleepSessionService {
   }
 
   /**
-   * Double-stop is a no-op: if native reports it isn't recording, there is
-   * nothing to stop (any prior row has already moved past 'recording' by
-   * the time a first `stopMonitoring` call finishes), so this returns
+   * Stops (or claims) whatever session native is holding, then finalizes and
+   * analyzes it.
+   *
+   * Both non-idle native phases are acted on:
+   * - 'recording' — the normal case: stop the live recording.
+   * - 'stopped' — native already ended the session on its own (the
+   *   notification's Stop action, a recorder error, low storage) and nobody
+   *   has claimed the result yet. Claiming it here is what keeps such a night
+   *   from stranding the UI: `stop()` is idempotent-when-stopped per the
+   *   plugin contract (`lib/native/snoreMonitor.ts`) and simply returns the
+   *   already-persisted `StopResult`, so this is the same code path with the
+   *   same authoritative timestamps. Returning `null` instead — as this used
+   *   to — left the row at 'recording'/'recorded' with nothing to move it on.
+   *
+   * Double-stop is still a no-op: once a first call has finished, native is
+   * 'idle' (its `deleteSessionAudio` clears the store), so this returns
    * `null` without touching the recorder or any row.
    */
   async stopMonitoring(now: Date): Promise<SleepSession | null> {
@@ -112,7 +125,7 @@ export class SleepSessionService {
     void now;
 
     const status = await this.deps.recorder.getStatus();
-    if (status.phase !== 'recording') return null;
+    if (status.phase === 'idle') return null;
 
     const result = await this.deps.recorder.stop();
     let session = this.deps.getSessions().find((s) => s.id === result.sessionId);

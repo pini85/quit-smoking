@@ -278,6 +278,33 @@ describe('SleepSessionService.stopMonitoring + analyzeSession', () => {
     expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
   });
 
+  it('claims a natively-stopped-but-unclaimed session rather than returning null (the notification-Stop case)', async () => {
+    // Native ended the session on its own (notification Stop / error / low
+    // storage) while the row still says 'recording'. Returning null here — as
+    // this used to — left the row with nothing to move it on, which is what
+    // dead-ended the /sleep hero.
+    const { service, recorder, store } = await makeHarness();
+    const row = makeRow({ id: 'sess-notif', state: 'recording' });
+    await store.addSleepSession(row);
+    const startedAtMs = new Date(row.startedAt).getTime();
+    recorder.stopped = {
+      sessionId: 'sess-notif',
+      startedAtMs,
+      endedAtMs: startedAtMs + 3_600_000,
+      durationMs: 3_000_000,
+      interrupted: true,
+    };
+    recorder.featuresBySession.set('sess-notif', quietFrames());
+
+    const result = await service.stopMonitoring(NOW);
+
+    expect(recorder.stop).toHaveBeenCalledTimes(1);
+    expect(result?.state).toBe('analyzed');
+    expect(result?.interrupted).toBe(true);
+    expect(result?.metrics?.recordingDurationMs).toBe(3_000_000);
+    expect(store.getSnapshot().sleepSessions[0].state).toBe('analyzed');
+  });
+
   it('double-stop is a no-op: the second call returns null without calling recorder.stop() again', async () => {
     const { service, recorder } = await makeHarness();
     const started = await service.startMonitoring(NOW);

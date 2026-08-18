@@ -103,6 +103,8 @@ export const sleep = {
   history: {
     title: 'Unihistoria',
     failed: 'Analyysi epäonnistui',
+    notAnalyzed: 'Ei vielä analysoitu',
+    unfinished: 'Tallennus jäi kesken',
     interrupted: 'Keskeytyi',
     delete: 'Poista tämä yö',
     deleteAll: 'Poista kaikki kuorsausdata',
