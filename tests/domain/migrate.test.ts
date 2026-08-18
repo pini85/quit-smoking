@@ -287,7 +287,7 @@ describe('migrateToLatest', () => {
   });
 });
 
-describe('migrateToLatest — v1 -> v2', () => {
+describe('MIGRATIONS[1] — v1 -> v2', () => {
   it('adds exactly the two new collections (empty) and bumps the version', () => {
     // Exercises MIGRATIONS[1] in isolation, one step at a time — unlike
     // `migrateToLatest`, which now walks all the way to schemaVersion 3.
@@ -318,7 +318,7 @@ describe('migrateToLatest — v1 -> v2', () => {
   });
 });
 
-describe('migrateToLatest — v2 -> v3', () => {
+describe('MIGRATIONS[2] — v2 -> v3', () => {
   it('adds exactly the one new collection (empty) and bumps the version', () => {
     // Exercises MIGRATIONS[2] in isolation, one step at a time — unlike
     // `migrateToLatest`, which walks all the way to CURRENT_EXPORT_VERSION
