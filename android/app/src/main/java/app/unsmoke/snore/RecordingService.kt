@@ -16,6 +16,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.StatFs
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import app.unsmoke.MainActivity
 import app.unsmoke.R
@@ -71,6 +72,9 @@ class RecordingService : Service() {
 
     /** Pending "rotation never completed" watchdog — see [armRotationWatchdog]. */
     private var rotationWatchdog: Runnable? = null
+
+    /** `SystemClock.elapsedRealtime()` when [onSegmentRotated] last actually completed a rotation, or 0L if never. */
+    private var lastRotationCompletedAtMs: Long = 0L
 
     /** Guards [finalize] so every stop path (intent/error/low-storage/watchdog/timeout/onDestroy) only runs once per session. */
     private var finalizing = false
@@ -246,11 +250,33 @@ class RecordingService : Service() {
      * add a second, differently-behaved rotation trigger to reason about.
      * This watchdog already covers "rotation stalled for any reason,"
      * duration-based or not, without complicating the protocol.)
+     *
+     * ASSUMPTION this hardens against: `MEDIA_RECORDER_INFO_NEXT_OUTPUT_FILE_STARTED`
+     * cancelling this watchdog (below) handles the documented, well-behaved
+     * ordering fine. But `MEDIA_RECORDER_INFO_MAX_DURATION_REACHED` is only
+     * ever observed as "the boundary was reached," not "the switch failed" —
+     * some vendor `MediaRecorder` implementations are known to emit it
+     * alongside, or even slightly after, a `NEXT_OUTPUT_FILE_STARTED` that
+     * already completed the real rotation, or to re-fire a duplicate
+     * `MAX_DURATION_REACHED` with no new rotation actually due. Blindly
+     * force-finalizing whenever this timer fires would kill a perfectly
+     * healthy overnight session at the very first 20-minute boundary on
+     * those devices. The runnable itself re-checks at fire time (not just
+     * at arm time) whether a rotation has completed, or the still-open
+     * segment file has kept growing, since this watchdog was armed, and
+     * no-ops (just clears itself) if either is true.
      */
     private fun armRotationWatchdog() {
         cancelRotationWatchdog()
+        val armedAtMs = SystemClock.elapsedRealtime()
+        val armedFileSizeBytes = segmentFile(activeSegmentIndex).length()
         val watchdog = Runnable {
-            finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
+            rotationWatchdog = null
+            val rotatedSinceArm = lastRotationCompletedAtMs >= armedAtMs
+            val stillGrowing = segmentFile(activeSegmentIndex).length() > armedFileSizeBytes
+            if (!rotatedSinceArm && !stillGrowing) {
+                finalizeIfRecording(SessionState.STOP_REASON_ERROR, interrupted = true)
+            }
         }
         rotationWatchdog = watchdog
         workerHandler.postDelayed(watchdog, ROTATION_WATCHDOG_MS)
@@ -273,6 +299,13 @@ class RecordingService : Service() {
             queuedSegmentIndex = null
         }
         queueNextSegment()
+        // Marks that a real rotation just completed, for whichever watchdog
+        // gets armed at the NEXT boundary (see armRotationWatchdog). Safe to
+        // set unconditionally even when queueNextSegment() just triggered an
+        // immediate finalize() (e.g. low storage/IO error right after
+        // rotating): finalize() cancels any pending watchdog outright, so
+        // there is no future watchdog left for this timestamp to matter to.
+        lastRotationCompletedAtMs = SystemClock.elapsedRealtime()
     }
 
     /**
