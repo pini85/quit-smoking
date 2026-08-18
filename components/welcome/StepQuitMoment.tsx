@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { useMessages } from '@/lib/i18n';
 
 export type QuitMode = 'now' | 'already' | 'soon';
 
@@ -80,6 +81,7 @@ export function StepQuitMoment({
   onSoonChange,
   onContinue,
 }: StepQuitMomentProps) {
+  const m = useMessages();
   const [error, setError] = useState<string | null>(null);
 
   function handleContinue() {
@@ -91,16 +93,16 @@ export function StepQuitMoment({
 
     if (mode === 'already') {
       if (!alreadyQuitAt) {
-        setError('Pick a date and time.');
+        setError(m.welcome.quitMoment.errors.pickDateTime);
         return;
       }
       const parsed = new Date(alreadyQuitAt);
       if (Number.isNaN(parsed.getTime())) {
-        setError('That date does not look right.');
+        setError(m.welcome.quitMoment.errors.dateWrong);
         return;
       }
       if (parsed.getTime() > Date.now()) {
-        setError('That is in the future — pick a moment that already happened.');
+        setError(m.welcome.quitMoment.errors.inFuture);
         return;
       }
       setError(null);
@@ -110,20 +112,20 @@ export function StepQuitMoment({
 
     // mode === 'soon'
     if (!soonQuitAt) {
-      setError('Pick a date and time.');
+      setError(m.welcome.quitMoment.errors.pickDateTime);
       return;
     }
     const parsed = new Date(soonQuitAt);
     if (Number.isNaN(parsed.getTime())) {
-      setError('That date does not look right.');
+      setError(m.welcome.quitMoment.errors.dateWrong);
       return;
     }
     if (parsed.getTime() < soonMin.getTime()) {
-      setError('Pick a moment from now onward.');
+      setError(m.welcome.quitMoment.errors.fromNowOn);
       return;
     }
     if (parsed.getTime() > soonMax.getTime()) {
-      setError('Pick a date within the next 30 days.');
+      setError(m.welcome.quitMoment.errors.within30Days);
       return;
     }
     setError(null);
@@ -133,14 +135,14 @@ export function StepQuitMoment({
   return (
     <div className="flex flex-1 flex-col gap-6">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">
-        When did you smoke your last cigarette?
+        {m.welcome.quitMoment.headline}
       </h1>
 
-      <div role="radiogroup" aria-label="Quit moment" className="flex flex-col gap-3">
+      <div role="radiogroup" aria-label={m.welcome.quitMoment.radiogroupLabel} className="flex flex-col gap-3">
         <Card className={mode === 'now' ? '!border-primary' : ''}>
           <OptionRow
             selected={mode === 'now'}
-            label="I'm quitting right now"
+            label={m.welcome.quitMoment.now}
             onSelect={() => onModeChange('now')}
           />
         </Card>
@@ -148,7 +150,7 @@ export function StepQuitMoment({
         <Card className={mode === 'already' ? '!border-primary' : ''}>
           <OptionRow
             selected={mode === 'already'}
-            label="I already quit"
+            label={m.welcome.quitMoment.already}
             onSelect={() => onModeChange('already')}
           />
           {mode === 'already' ? (
@@ -158,10 +160,10 @@ export function StepQuitMoment({
                 value={alreadyQuitAt}
                 max={toDatetimeLocalValue(new Date())}
                 onChange={(event) => onAlreadyChange(event.target.value)}
-                aria-label="Date and time you last smoked"
+                aria-label={m.welcome.quitMoment.lastSmokedLabel}
                 className="h-12 w-full rounded-button border border-border bg-surface px-3 text-base text-ink"
               />
-              <p className="mt-1.5 text-xs text-ink-faint">Roughly is fine.</p>
+              <p className="mt-1.5 text-xs text-ink-faint">{m.welcome.quitMoment.roughlyFine}</p>
             </div>
           ) : null}
         </Card>
@@ -169,7 +171,7 @@ export function StepQuitMoment({
         <Card className={mode === 'soon' ? '!border-primary' : ''}>
           <OptionRow
             selected={mode === 'soon'}
-            label="I'm quitting soon"
+            label={m.welcome.quitMoment.soon}
             onSelect={() => onModeChange('soon')}
           />
           {mode === 'soon' ? (
@@ -180,7 +182,7 @@ export function StepQuitMoment({
                 min={toDatetimeLocalValue(soonMin)}
                 max={toDatetimeLocalValue(soonMax)}
                 onChange={(event) => onSoonChange(event.target.value)}
-                aria-label="Date and time you plan to quit"
+                aria-label={m.welcome.quitMoment.planLabel}
                 className="h-12 w-full rounded-button border border-border bg-surface px-3 text-base text-ink"
               />
             </div>
@@ -198,7 +200,7 @@ export function StepQuitMoment({
 
       <div className="mt-auto pb-6">
         <Button fullWidth size="lg" onClick={handleContinue}>
-          Continue
+          {m.welcome.quitMoment.continue}
         </Button>
       </div>
     </div>

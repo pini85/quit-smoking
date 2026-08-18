@@ -4,6 +4,7 @@ import type { MilestoneState } from '@/domain/milestones/engine';
 import { categoryProgress } from '@/domain/milestones/engine';
 import { CATEGORY_META } from './categoryMeta';
 import { filterEmerging } from './filterEmerging';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 export type BodyExplorerViewProps = {
   states: MilestoneState[];
@@ -17,6 +18,7 @@ function CategoryTile({
   category: MilestoneCategory;
   progress?: { achieved: number; happeningNow: number; total: number };
 }) {
+  const m = useMessages();
   const meta = CATEGORY_META[category];
   const underway = (progress?.achieved ?? 0) + (progress?.happeningNow ?? 0);
   const total = progress?.total ?? 0;
@@ -31,7 +33,7 @@ function CategoryTile({
       </span>
       <span className="text-[14px] font-semibold leading-snug text-ink">{meta.label}</span>
       <span className="text-[12px] text-ink-faint">
-        {underway} of {total} underway
+        {interpolate(m.health.bodyExplorer.underwayOf, { underway, total })}
       </span>
     </Link>
   );

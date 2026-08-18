@@ -4,6 +4,7 @@ import type { HealthMilestone } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
 import { happeningNow, recentlyAchieved, upcomingSoon } from '@/domain/milestones/engine';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useMessages } from '@/lib/i18n';
 import { filterEmerging } from './filterEmerging';
 import { FullMilestoneCard } from './MilestoneCard';
 import { CompactAchievedRow, CompactUpcomingCard } from './MilestoneRows';
@@ -27,6 +28,7 @@ export function RightNowView({
   preQuit,
   onOpenMilestone,
 }: RightNowViewProps) {
+  const m = useMessages();
   const visible = filterEmerging(states, showEmergingEvidence);
 
   const now = happeningNow(visible);
@@ -36,14 +38,14 @@ export function RightNowView({
   return (
     <div className="flex flex-col gap-6">
       {preQuit ? (
-        <EmptyState icon="⏳">
-          Your timeline starts the moment you do. Everything below is waiting.
-        </EmptyState>
+        <EmptyState icon="⏳">{m.health.rightNow.preQuitBanner}</EmptyState>
       ) : null}
 
       {now.length > 0 ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-[17px] font-semibold tracking-tight text-ink">Happening now</h2>
+          <h2 className="text-[17px] font-semibold tracking-tight text-ink">
+            {m.health.rightNow.happeningNow}
+          </h2>
           <div className="flex flex-col gap-3">
             {now.map((state) => (
               <FullMilestoneCard
@@ -58,7 +60,9 @@ export function RightNowView({
 
       {soon.length > 0 ? (
         <section className="flex flex-col gap-3">
-          <h2 className="text-[17px] font-semibold tracking-tight text-ink">Arriving soon</h2>
+          <h2 className="text-[17px] font-semibold tracking-tight text-ink">
+            {m.health.rightNow.arrivingSoon}
+          </h2>
           <div className="flex flex-col gap-2">
             {soon.map((state) => (
               <CompactUpcomingCard
@@ -74,7 +78,7 @@ export function RightNowView({
       {done.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className="text-[17px] font-semibold tracking-tight text-ink">
-            Recently completed
+            {m.health.rightNow.recentlyCompleted}
           </h2>
           <div className="flex flex-col gap-2">
             {done.map((state) => (
@@ -89,7 +93,7 @@ export function RightNowView({
       ) : null}
 
       {!preQuit && now.length === 0 && soon.length === 0 && done.length === 0 ? (
-        <EmptyState>Nothing to show here yet — check back soon.</EmptyState>
+        <EmptyState>{m.health.rightNow.nothingYet}</EmptyState>
       ) : null}
     </div>
   );

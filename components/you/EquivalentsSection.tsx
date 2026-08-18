@@ -9,18 +9,13 @@ import { formatMoney } from '@/components/home/formatMoney';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 
 export type EquivalentsSectionProps = {
   profile: QuitProfile;
   preferences: Preferences | null;
   store: DataStore;
 };
-
-const SEED_EQUIVALENTS: MoneyEquivalent[] = [
-  { label: 'a dinner out', unitPrice: 30 },
-  { label: 'a cinema ticket', unitPrice: 12 },
-  { label: 'a month of coffee', unitPrice: 45 },
-];
 
 /**
  * Manager for `preferences.moneyEquivalents` — the "how many dinners out is
@@ -29,6 +24,13 @@ const SEED_EQUIVALENTS: MoneyEquivalent[] = [
  * brief, that applies to the seeded examples too.
  */
 export function EquivalentsSection({ profile, preferences, store }: EquivalentsSectionProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
+  const seedEquivalents: MoneyEquivalent[] = [
+    { label: m.you.equivalents.seedDinner, unitPrice: 30 },
+    { label: m.you.equivalents.seedCinema, unitPrice: 12 },
+    { label: m.you.equivalents.seedCoffeeMonth, unitPrice: 45 },
+  ];
   const list = preferences?.moneyEquivalents ?? [];
   const [label, setLabel] = useState('');
   const [price, setPrice] = useState('');
@@ -43,7 +45,7 @@ export function EquivalentsSection({ profile, preferences, store }: EquivalentsS
       await store.savePreferences({ ...base, moneyEquivalents: next, updatedAt: toLocalIso(now) });
     } catch (err) {
       console.error('Unsmoke: failed to save money equivalents', err);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -66,26 +68,26 @@ export function EquivalentsSection({ profile, preferences, store }: EquivalentsS
   return (
     <Card className="flex flex-col gap-4">
       <div>
-        <h2 className="text-[15px] font-semibold text-ink">Money equivalents</h2>
-        <p className="mt-0.5 text-[13px] text-ink-muted">Make savings tangible.</p>
+        <h2 className="text-[15px] font-semibold text-ink">{m.you.equivalents.title}</h2>
+        <p className="mt-0.5 text-[13px] text-ink-muted">{m.you.equivalents.subtitle}</p>
       </div>
 
       {list.length === 0 ? (
-        <Button variant="secondary" onClick={() => void persist(SEED_EQUIVALENTS)} disabled={saving}>
-          Add examples
+        <Button variant="secondary" onClick={() => void persist(seedEquivalents)} disabled={saving}>
+          {m.you.equivalents.addExamples}
         </Button>
       ) : (
         <ul className="flex flex-col">
           {list.map((eq, index) => (
             <li key={`${eq.label}-${index}`} className="flex min-h-11 items-center justify-between gap-3">
               <span className="text-[14px] text-ink">
-                {eq.label} — {formatMoney(eq.unitPrice, profile.currency)}
+                {eq.label} — {formatMoney(eq.unitPrice, profile.currency, locale)}
               </span>
               <button
                 type="button"
                 onClick={() => void handleRemove(index)}
                 disabled={saving}
-                aria-label={`Remove ${eq.label}`}
+                aria-label={interpolate(m.you.equivalents.removeAriaLabel, { label: eq.label })}
                 className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.9] disabled:opacity-40"
               >
                 ✕
@@ -101,8 +103,8 @@ export function EquivalentsSection({ profile, preferences, store }: EquivalentsS
             type="text"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
-            placeholder="Label (e.g. a dinner out)"
-            aria-label="Equivalent label"
+            placeholder={m.you.equivalents.labelPlaceholder}
+            aria-label={m.you.equivalents.labelAriaLabel}
             className="h-12 min-w-0 flex-1 rounded-button border border-border bg-surface px-3 text-base text-ink"
           />
           <input
@@ -112,8 +114,8 @@ export function EquivalentsSection({ profile, preferences, store }: EquivalentsS
             step={0.5}
             value={price}
             onChange={(event) => setPrice(event.target.value)}
-            placeholder="Price"
-            aria-label="Equivalent price"
+            placeholder={m.you.equivalents.pricePlaceholder}
+            aria-label={m.you.equivalents.priceAriaLabel}
             className="h-12 w-24 shrink-0 rounded-button border border-border bg-surface px-3 text-base text-ink"
           />
         </div>
@@ -122,7 +124,7 @@ export function EquivalentsSection({ profile, preferences, store }: EquivalentsS
           variant="secondary"
           disabled={!label.trim() || !price || saving}
         >
-          Add
+          {m.you.equivalents.add}
         </Button>
       </form>
     </Card>

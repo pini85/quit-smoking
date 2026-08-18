@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAppData } from '@/lib/hooks/useAppData';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { LOCALES, type Locale } from '@/domain/types';
 import { showToast } from '@/components/ui/Toast';
 import { toLocalIso } from '@/lib/utils/iso';
@@ -16,8 +16,6 @@ import { StepReasons } from './StepReasons';
 
 const TOTAL_STEPS = 3;
 const THIRTY_DAYS_MS = 30 * 86_400_000;
-
-const SUGGESTED_REASONS = ['My kids', 'Breathing', 'Money', 'Smell', 'Health', 'Freedom'];
 
 const SUPPORTED_CURRENCIES = new Set([
   'EUR',
@@ -99,6 +97,7 @@ export function WelcomeWizard() {
   const router = useRouter();
   const { store } = useAppData();
   const { locale, setLocale } = useLocale();
+  const m = useMessages();
 
   const [mountedAt] = useState(() => new Date());
   const soonMin = mountedAt;
@@ -210,7 +209,7 @@ export function WelcomeWizard() {
       await store.saveProfile(profile);
 
       router.replace('/');
-      showToast("That's it. Everything from here is measured, not promised.", {
+      showToast(m.welcome.finishedToast, {
         withRingPulse: true,
       });
       // Deliberately leave `saving` true on success: this screen is on its
@@ -218,7 +217,7 @@ export function WelcomeWizard() {
       // meaningful "not saving" state to return the buttons to.
     } catch (err) {
       console.error('Unsmoke: failed to save onboarding profile', err);
-      showToast('Something went wrong saving your profile. Please try again.');
+      showToast(m.welcome.onboardingFailed);
       setSaving(false);
     }
   }
@@ -292,7 +291,7 @@ export function WelcomeWizard() {
 
       {step === 3 ? (
         <StepReasons
-          suggestions={SUGGESTED_REASONS}
+          suggestions={m.welcome.suggestedReasons}
           selectedSuggestions={selectedSuggestions}
           customReasons={customReasons}
           onToggleSuggestion={toggleSuggestion}

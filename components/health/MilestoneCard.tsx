@@ -2,6 +2,7 @@ import type { MilestoneState } from '@/domain/milestones/engine';
 import { Card } from '@/components/ui/Card';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { useMessages } from '@/lib/i18n';
 import { CATEGORY_META } from './categoryMeta';
 
 export type FullMilestoneCardProps = {
@@ -23,6 +24,7 @@ export type FullMilestoneCardProps = {
  * the category detail page, so the two views can't drift apart.
  */
 export function FullMilestoneCard({ state, onOpen, showEmergingCaveat }: FullMilestoneCardProps) {
+  const m = useMessages();
   const { milestone, progress } = state;
   const category = CATEGORY_META[milestone.category];
 
@@ -42,13 +44,13 @@ export function FullMilestoneCard({ state, onOpen, showEmergingCaveat }: FullMil
         <EvidenceBadge level={milestone.evidenceLevel} />
         {showEmergingCaveat && milestone.evidenceLevel === 'emerging' ? (
           <p className="text-[12px] leading-relaxed text-ink-faint">
-            Early evidence — we&rsquo;re telling you because it&rsquo;s interesting, not proven.
+            {m.health.milestoneCard.earlyEvidence}
           </p>
         ) : null}
       </div>
 
       {progress !== undefined ? (
-        <ProgressBar value={progress} label="Progress through this change" />
+        <ProgressBar value={progress} label={m.health.milestoneCard.progressLabel} />
       ) : null}
 
       {milestone.honestNote ? (

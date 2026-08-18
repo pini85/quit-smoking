@@ -5,6 +5,7 @@ import type { CravingSession } from '@/domain/types';
 import { hourHistogram, hardestWindow } from '@/domain/stats/cravingStats';
 import { startOfLocalDay } from '@/domain/time';
 import { HourHeatStrip } from '@/components/charts/HourHeatStrip';
+import { interpolate, useMessages } from '@/lib/i18n';
 import { GatedCard } from './GatedCard';
 
 function pad2(n: number): string {
@@ -25,6 +26,7 @@ export type TimeOfDaySectionProps = {
  * exclusive `endHour` itself.
  */
 export function TimeOfDaySection({ sessions }: TimeOfDaySectionProps) {
+  const m = useMessages();
   const { gateMet, counts, highlightRange, caption } = useMemo(() => {
     const distinctDays = new Set(
       sessions.map((s) => startOfLocalDay(new Date(s.startedAt)).getTime())
@@ -36,22 +38,25 @@ export function TimeOfDaySection({ sessions }: TimeOfDaySectionProps) {
       ? { start: window.startHour, end: (window.startHour + 2) % 24 }
       : undefined;
     const caption = window
-      ? `${pad2(window.startHour)}:00–${pad2(window.endHour)}:00 is your storm window.`
+      ? interpolate(m.progress.timeOfDay.caption, {
+          start: pad2(window.startHour),
+          end: pad2(window.endHour),
+        })
       : null;
     return { gateMet, counts, highlightRange, caption };
-  }, [sessions]);
+  }, [sessions, m.progress.timeOfDay.caption]);
 
   return (
     <GatedCard
-      title="Time of day"
+      title={m.progress.timeOfDay.title}
       gateMet={gateMet}
-      emptyCopy="Once you've logged about ten cravings, we'll map your risky hours — so a 9 pm craving becomes something you saw coming."
+      emptyCopy={m.progress.timeOfDay.empty}
     >
       <div className="flex flex-col gap-2">
         <HourHeatStrip
           counts={counts}
           highlightRange={highlightRange}
-          ariaLabel="Cravings by hour of day, highlighting your hardest three-hour window"
+          ariaLabel={m.progress.timeOfDay.ariaLabel}
         />
         {caption ? <p className="text-[13px] leading-relaxed text-ink-muted">{caption}</p> : null}
       </div>

@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { HEALTH_MILESTONES } from '@/data/healthMilestones';
 import { Card } from '@/components/ui/Card';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 const VERSION = '1.0.0';
 
@@ -17,6 +18,7 @@ function dedupedSources(): { label: string; url: string }[] {
 }
 
 export function AboutSection() {
+  const m = useMessages();
   const [expanded, setExpanded] = useState(false);
   const sources = useMemo(() => dedupedSources(), []);
 
@@ -24,15 +26,13 @@ export function AboutSection() {
     <Card className="flex flex-col gap-3">
       <div>
         <h2 className="text-[15px] font-semibold text-ink">Unsmoke</h2>
-        <p className="text-[12px] text-ink-faint">Version {VERSION}</p>
+        <p className="text-[12px] text-ink-faint">
+          {interpolate(m.you.about.version, { version: VERSION })}
+        </p>
       </div>
 
-      <p className="text-[13px] leading-relaxed text-ink-muted">
-        Everything stays on this device. No account, no analytics, no tracking.
-      </p>
-      <p className="text-[13px] leading-relaxed text-ink-muted">
-        Educational information from cited public-health sources — not medical advice.
-      </p>
+      <p className="text-[13px] leading-relaxed text-ink-muted">{m.you.about.allLocal}</p>
+      <p className="text-[13px] leading-relaxed text-ink-muted">{m.you.about.educational}</p>
 
       <button
         type="button"
@@ -40,7 +40,9 @@ export function AboutSection() {
         aria-expanded={expanded}
         className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
       >
-        <span className="text-[13px] font-medium text-ink">Sources ({sources.length})</span>
+        <span className="text-[13px] font-medium text-ink">
+          {interpolate(m.you.about.sources, { count: sources.length })}
+        </span>
         <span aria-hidden="true" className="text-ink-faint">
           {expanded ? '−' : '+'}
         </span>
@@ -57,7 +59,9 @@ export function AboutSection() {
               className="flex min-h-11 items-center text-[13px] text-primary-strong underline underline-offset-4"
             >
               {source.label}
-              <span className="ml-2 text-[11px] text-ink-faint no-underline">opens online ↗</span>
+              <span className="ml-2 text-[11px] text-ink-faint no-underline">
+                {m.you.about.opensOnline}
+              </span>
             </a>
           ))}
         </div>

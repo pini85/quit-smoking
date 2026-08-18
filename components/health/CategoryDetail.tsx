@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { MilestoneSheet } from './MilestoneSheet';
 import { FullMilestoneCard } from './MilestoneCard';
 import { CATEGORY_META } from './categoryMeta';
+import { useMessages } from '@/lib/i18n';
 
 function earliestHoursOf(m: HealthMilestone): number {
   return m.timing.kind === 'noTimeline' ? Infinity : m.timing.earliestHours;
@@ -43,12 +44,13 @@ function Skeleton() {
 }
 
 function BackLink() {
+  const m = useMessages();
   return (
     <Link
       href="/health"
       className="inline-flex min-h-11 w-fit items-center text-[14px] font-medium text-primary-strong"
     >
-      ← Your recovery
+      {m.health.categoryDetail.back}
     </Link>
   );
 }
@@ -61,6 +63,7 @@ function BackLink() {
 export function CategoryDetail({ category }: { category: MilestoneCategory }) {
   const { data } = useAppData();
   const now = useNow(60000);
+  const m = useMessages();
   const [sheetMilestone, setSheetMilestone] = useState<HealthMilestone | null>(null);
 
   const profile = data.profile;
@@ -108,7 +111,7 @@ export function CategoryDetail({ category }: { category: MilestoneCategory }) {
         </div>
 
         {dated.length === 0 && noTimeline.length === 0 ? (
-          <EmptyState>Nothing catalogued for this category yet.</EmptyState>
+          <EmptyState>{m.health.categoryDetail.empty}</EmptyState>
         ) : (
           <>
             <div className="flex flex-col gap-3">
@@ -125,7 +128,7 @@ export function CategoryDetail({ category }: { category: MilestoneCategory }) {
             {noTimeline.length > 0 ? (
               <div className="flex flex-col gap-3">
                 <h2 className="text-[13px] font-medium uppercase tracking-[0.06em] text-ink-faint">
-                  Also true (no exact timeline)
+                  {m.health.categoryDetail.alsoTrue}
                 </h2>
                 <div className="flex flex-col gap-3">
                   {noTimeline.map((state) => (

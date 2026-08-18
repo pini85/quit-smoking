@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { useMessages } from '@/lib/i18n';
 
 export type StepReasonsProps = {
   suggestions: string[];
@@ -31,6 +32,7 @@ export function StepReasons({
   onStart,
   saving,
 }: StepReasonsProps) {
+  const m = useMessages();
   const [draft, setDraft] = useState('');
 
   function handleAdd(event: FormEvent) {
@@ -45,20 +47,18 @@ export function StepReasons({
     <div className="flex flex-1 flex-col gap-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" onClick={onBack} disabled={saving} className="-ml-2 px-2">
-          Back
+          {m.welcome.reasons.back}
         </Button>
         <Button variant="ghost" onClick={onSkip} disabled={saving} className="-mr-2 px-2">
-          Skip
+          {m.welcome.reasons.skip}
         </Button>
       </div>
 
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          Why are you doing this?
+          {m.welcome.reasons.headline}
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">
-          You&apos;ll see these words again when it matters.
-        </p>
+        <p className="mt-1 text-sm text-ink-muted">{m.welcome.reasons.subheading}</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -78,12 +78,12 @@ export function StepReasons({
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add your own"
-          aria-label="Add your own reason"
+          placeholder={m.welcome.reasons.addPlaceholder}
+          aria-label={m.welcome.reasons.addAriaLabel}
           className="h-12 min-w-0 flex-1 rounded-button border border-border bg-surface px-3 text-base text-ink"
         />
         <Button type="submit" variant="secondary" disabled={!draft.trim()}>
-          Add
+          {m.welcome.reasons.add}
         </Button>
       </form>
 
@@ -99,7 +99,7 @@ export function StepReasons({
 
       <div className="mt-auto pb-6">
         <Button fullWidth size="lg" onClick={onStart} disabled={saving}>
-          {saving ? 'Saving…' : 'Start'}
+          {saving ? m.welcome.reasons.saving : m.welcome.reasons.start}
         </Button>
       </div>
     </div>

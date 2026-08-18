@@ -5,6 +5,7 @@ import type { CravingSession } from '@/domain/types';
 import { weeklyCounts, avgInitialIntensity } from '@/domain/stats/cravingStats';
 import { isoWeekKey } from '@/domain/time';
 import { TrendLine, type TrendPoint } from '@/components/charts/TrendLine';
+import { useMessages } from '@/lib/i18n';
 import { GatedCard } from './GatedCard';
 
 const SEVEN_DAYS_MS = 7 * 86_400_000;
@@ -29,6 +30,7 @@ export type CravingDeclineSectionProps = {
  * `null` y-value has no honest meaning on this chart).
  */
 export function CravingDeclineSection({ sessions, quitAt, now }: CravingDeclineSectionProps) {
+  const m = useMessages();
   const { gateMet, countSeries, intensitySeries } = useMemo(() => {
     const gateMet = now.getTime() - quitAt.getTime() >= SEVEN_DAYS_MS && sessions.length >= 5;
     const weekly = weeklyCounts(sessions, quitAt, now);
@@ -56,26 +58,20 @@ export function CravingDeclineSection({ sessions, quitAt, now }: CravingDeclineS
 
   return (
     <GatedCard
-      title="Craving decline"
+      title={m.progress.cravingDecline.title}
       gateMet={gateMet}
-      emptyCopy="After your first week of logged cravings, this chart will show them getting rarer and weaker. It's the most convincing graph in the app — you'll want to see it."
+      emptyCopy={m.progress.cravingDecline.empty}
     >
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <p className="text-[13px] font-medium text-ink-muted">Cravings per week</p>
-          <TrendLine
-            series={countSeries}
-            ariaLabel="Cravings logged per week, trending over time"
-          />
+          <p className="text-[13px] font-medium text-ink-muted">{m.progress.cravingDecline.perWeek}</p>
+          <TrendLine series={countSeries} ariaLabel={m.progress.cravingDecline.ariaCounts} />
         </div>
         <div className="flex flex-col gap-2">
           <p className="text-[13px] font-medium text-ink-muted">
-            Average starting intensity by week
+            {m.progress.cravingDecline.avgIntensity}
           </p>
-          <TrendLine
-            series={intensitySeries}
-            ariaLabel="Average starting craving intensity per week, trending over time"
-          />
+          <TrendLine series={intensitySeries} ariaLabel={m.progress.cravingDecline.ariaIntensity} />
         </div>
       </div>
     </GatedCard>

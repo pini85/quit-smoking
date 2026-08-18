@@ -7,6 +7,7 @@ import { toLocalIso } from '@/lib/utils/iso';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 export type ReasonsSectionProps = {
   reasons: PersonalReason[];
@@ -19,6 +20,7 @@ export type ReasonsSectionProps = {
  * leave unused for now.
  */
 export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
+  const m = useMessages();
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
       setDraft('');
     } catch (err) {
       console.error('Unsmoke: failed to add reason', err);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
     } finally {
       setAdding(false);
     }
@@ -50,7 +52,7 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
       await store.removeReason(id);
     } catch (err) {
       console.error('Unsmoke: failed to remove reason', err);
-      showToast("Couldn't remove — please try again.");
+      showToast(m.you.reasons.couldNotRemove);
     } finally {
       setRemovingId(null);
     }
@@ -59,12 +61,12 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
   return (
     <Card className="flex flex-col gap-4">
       <div>
-        <h2 className="text-[15px] font-semibold text-ink">My reasons</h2>
-        <p className="mt-0.5 text-[13px] text-ink-muted">These appear during cravings.</p>
+        <h2 className="text-[15px] font-semibold text-ink">{m.you.reasons.title}</h2>
+        <p className="mt-0.5 text-[13px] text-ink-muted">{m.you.reasons.subtitle}</p>
       </div>
 
       {reasons.length === 0 ? (
-        <p className="text-[13px] text-ink-muted">No reasons yet — add one below.</p>
+        <p className="text-[13px] text-ink-muted">{m.you.reasons.empty}</p>
       ) : (
         <ul className="flex flex-col">
           {reasons.map((reason) => (
@@ -74,7 +76,7 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
                 type="button"
                 onClick={() => void handleRemove(reason.id)}
                 disabled={removingId === reason.id}
-                aria-label={`Remove reason: ${reason.text}`}
+                aria-label={interpolate(m.you.reasons.removeAriaLabel, { text: reason.text })}
                 className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.9] disabled:opacity-40"
               >
                 ✕
@@ -89,12 +91,12 @@ export function ReasonsSection({ reasons, store }: ReasonsSectionProps) {
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Add a reason"
-          aria-label="Add a reason"
+          placeholder={m.you.reasons.placeholder}
+          aria-label={m.you.reasons.ariaLabel}
           className="h-12 min-w-0 flex-1 rounded-button border border-border bg-surface px-3 text-base text-ink"
         />
         <Button type="submit" variant="secondary" disabled={!draft.trim() || adding}>
-          Add
+          {m.you.reasons.add}
         </Button>
       </form>
     </Card>

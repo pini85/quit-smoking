@@ -12,14 +12,9 @@ import { MilestoneSheet } from '@/components/health/MilestoneSheet';
 import { RightNowView } from '@/components/health/RightNowView';
 import { TimelineView } from '@/components/health/TimelineView';
 import { BodyExplorerView } from '@/components/health/BodyExplorerView';
+import { useMessages } from '@/lib/i18n';
 
 type Segment = 'right-now' | 'timeline' | 'body';
-
-const SEGMENTS: SegmentedOption[] = [
-  { id: 'right-now', label: 'Right now' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'body', label: 'Body' },
-];
 
 function isSegment(id: string): id is Segment {
   return id === 'right-now' || id === 'timeline' || id === 'body';
@@ -44,6 +39,12 @@ function Skeleton() {
 export default function HealthPage() {
   const { data } = useAppData();
   const now = useNow(60000);
+  const m = useMessages();
+  const SEGMENTS: SegmentedOption[] = [
+    { id: 'right-now', label: m.health.segments.rightNow },
+    { id: 'timeline', label: m.health.segments.timeline },
+    { id: 'body', label: m.health.segments.body },
+  ];
   const [segment, setSegment] = useState<Segment>('right-now');
   const [sheetMilestone, setSheetMilestone] = useState<HealthMilestone | null>(null);
 
@@ -71,7 +72,7 @@ export default function HealthPage() {
   return (
     <>
       <div className="flex flex-col gap-4 pt-2">
-        <h1 className="text-[24px] font-semibold tracking-tight text-ink">Your recovery</h1>
+        <h1 className="text-[24px] font-semibold tracking-tight text-ink">{m.health.pageTitle}</h1>
 
         <SegmentedControl
           options={SEGMENTS}
@@ -79,7 +80,7 @@ export default function HealthPage() {
           onChange={(id) => {
             if (isSegment(id)) setSegment(id);
           }}
-          label="Health view"
+          label={m.health.segments.label}
         />
 
         {segment === 'right-now' ? (

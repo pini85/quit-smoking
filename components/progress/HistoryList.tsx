@@ -3,9 +3,9 @@
 import { useMemo, useState } from 'react';
 import type { CravingOutcome, CravingSession, Locale } from '@/domain/types';
 import { dateFmt } from '@/lib/i18n/fmt';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages, type Messages } from '@/lib/i18n';
 import { BELIEF_META } from '@/data/beliefs';
-import { TRIGGER_META } from '@/data/triggers';
+import { triggerLabel } from '@/data/triggers';
 import { INTERVENTIONS } from '@/data/interventions';
 import { formatDurationDigital } from '@/domain/time';
 import { Card } from '@/components/ui/Card';
@@ -47,12 +47,15 @@ function fullDateTime(iso: string, locale: Locale): string {
  * 'unresolved' (or the theoretically-possible still-open `null`) reads as
  * plain 'Logged'.
  */
-function outcomeWord(outcome: CravingOutcome | null): { text: string; muted: boolean } {
-  if (outcome === 'passed') return { text: 'Passed', muted: false };
-  if (outcome === 'much-weaker') return { text: 'Much weaker', muted: false };
-  if (outcome === 'still-there') return { text: 'Outlasted', muted: false };
-  if (outcome === 'smoked') return { text: 'Smoked — and logged honestly', muted: true };
-  return { text: 'Logged', muted: false }; // null | 'unresolved'
+function outcomeWord(
+  outcome: CravingOutcome | null,
+  m: Messages['progress']['history']['outcomes']
+): { text: string; muted: boolean } {
+  if (outcome === 'passed') return { text: m.passed, muted: false };
+  if (outcome === 'much-weaker') return { text: m.muchWeaker, muted: false };
+  if (outcome === 'still-there') return { text: m.stillThere, muted: false };
+  if (outcome === 'smoked') return { text: m.smoked, muted: true };
+  return { text: m.logged, muted: false }; // null | 'unresolved'
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -75,6 +78,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
  */
 export function HistoryList({ sessions, now }: HistoryListProps) {
   const { locale } = useLocale();
+  const m = useMessages();
   const [showAll, setShowAll] = useState(false);
   const [selected, setSelected] = useState<CravingSession | null>(null);
 
@@ -92,12 +96,16 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-[17px] font-semibold tracking-tight text-ink">Craving history</h2>
+      <h2 className="text-[17px] font-semibold tracking-tight text-ink">
+        {m.progress.history.title}
+      </h2>
 
       <div className="flex flex-col gap-2">
         {displayed.map((session) => {
-          const trigger = session.trigger ? TRIGGER_META[session.trigger].label : 'untagged';
-          const outcome = outcomeWord(session.outcome);
+          const trigger = session.trigger
+            ? triggerLabel(session.trigger, locale)
+            : m.progress.history.untagged;
+          const outcome = outcomeWord(session.outcome, m.progress.history.outcomes);
           return (
             <Card key={session.id} onClick={() => setSelected(session)} className="!p-4">
               <p className="text-[13px] leading-relaxed tabular-nums text-ink">
@@ -118,45 +126,59 @@ export function HistoryList({ sessions, now }: HistoryListProps) {
           onClick={() => setShowAll(true)}
           className="min-h-11 self-start text-[14px] font-medium text-primary-strong"
         >
-          Show all {sorted.length}
+          {interpolate(m.progress.history.showAll, { count: sorted.length })}
         </button>
       ) : null}
 
-      <Sheet open={selected !== null} onClose={() => setSelected(null)} title="Craving detail">
+      <Sheet
+        open={selected !== null}
+        onClose={() => setSelected(null)}
+        title={m.progress.history.sheetTitle}
+      >
         {selected ? (
           <div className="flex flex-col gap-4 pb-2">
-            <DetailRow label="Started" value={fullDateTime(selected.startedAt, locale)} />
+            <DetailRow label={m.progress.history.started} value={fullDateTime(selected.startedAt, locale)} />
             {selected.endedAt ? (
               <DetailRow
-                label="Duration"
+                label={m.progress.history.duration}
                 value={formatDurationDigital(
                   new Date(selected.endedAt).getTime() - new Date(selected.startedAt).getTime()
                 )}
               />
             ) : null}
             <DetailRow
-              label="Intensity"
+              label={m.progress.history.intensity}
               value={`${selected.initialIntensity} → ${selected.finalIntensity ?? '—'}`}
             />
             <DetailRow
-              label="Trigger"
-              value={selected.trigger ? TRIGGER_META[selected.trigger].label : 'untagged'}
+              label={m.progress.history.trigger}
+              value={
+                selected.trigger ? triggerLabel(selected.trigger, locale) : m.progress.history.untagged
+              }
             />
             <DetailRow
-              label="Interventions used"
+              label={m.progress.history.interventionsUsed}
               value={
                 selected.interventionIds && selected.interventionIds.length > 0
                   ? selected.interventionIds
                       .map((id) => INTERVENTIONS.find((i) => i.id === id)?.title ?? id)
                       .join(', ')
-                  : 'None'
+                  : m.progress.history.none
               }
             />
             {selected.beliefId ? (
-              <DetailRow label="It promised" value={BELIEF_META[selected.beliefId].label} />
+              <DetailRow
+                label={m.progress.history.itPromised}
+                value={BELIEF_META[selected.beliefId].label}
+              />
             ) : null}
-            <DetailRow label="Outcome" value={outcomeWord(selected.outcome).text} />
-            {selected.notes ? <DetailRow label="Notes" value={selected.notes} /> : null}
+            <DetailRow
+              label={m.progress.history.outcome}
+              value={outcomeWord(selected.outcome, m.progress.history.outcomes).text}
+            />
+            {selected.notes ? (
+              <DetailRow label={m.progress.history.notes} value={selected.notes} />
+            ) : null}
           </div>
         ) : null}
       </Sheet>

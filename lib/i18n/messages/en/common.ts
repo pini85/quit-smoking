@@ -4,4 +4,10 @@
 export const common = {
   saveFailed: "Couldn't save — please try again.",
   noted: 'Noted.',
+  // Joiner for a two-item list built at runtime ("3 x and 1 y").
+  andJoiner: ' and ',
+  stepper: {
+    decrease: 'Decrease {label}',
+    increase: 'Increase {label}',
+  },
 };

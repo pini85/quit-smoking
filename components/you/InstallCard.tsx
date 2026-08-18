@@ -8,6 +8,7 @@ import { useInstallPrompt } from '@/lib/hooks/useInstallPrompt';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/components/ui/Toast';
+import { useMessages } from '@/lib/i18n';
 
 export type InstallCardProps = {
   preferences: Preferences | null;
@@ -32,6 +33,7 @@ async function dismiss(preferences: Preferences | null, store: DataStore): Promi
  */
 export function InstallCard({ preferences, store }: InstallCardProps) {
   const { platform, isStandalone, canPromptInstall, promptInstall } = useInstallPrompt();
+  const m = useMessages();
 
   if (isStandalone || preferences?.dismissedInstallHint) return null;
   if (!canPromptInstall && platform !== 'ios') return null;
@@ -39,7 +41,7 @@ export function InstallCard({ preferences, store }: InstallCardProps) {
   async function handleInstallClick() {
     const outcome = await promptInstall();
     if (outcome === 'accepted') {
-      showToast('Installed');
+      showToast(m.you.install.installed);
     }
   }
 
@@ -47,24 +49,24 @@ export function InstallCard({ preferences, store }: InstallCardProps) {
     <Card className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[15px] font-semibold text-ink">Install Unsmoke</h2>
+          <h2 className="text-[15px] font-semibold text-ink">{m.you.install.title}</h2>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-            {canPromptInstall
-              ? 'Add it to your home screen for one-tap access — no app store needed.'
-              : 'Tap Share, then "Add to Home Screen" — no app store needed.'}
+            {canPromptInstall ? m.you.install.androidBody : m.you.install.iosBody}
           </p>
         </div>
         <button
           type="button"
           onClick={() => void dismiss(preferences, store)}
-          aria-label="Dismiss install hint"
+          aria-label={m.you.install.dismissAriaLabel}
           className="flex h-11 w-11 shrink-0 items-center justify-center text-ink-faint transition-transform duration-[var(--dur-press)] active:scale-[0.9]"
         >
           ✕
         </button>
       </div>
 
-      {canPromptInstall ? <Button onClick={() => void handleInstallClick()}>Install</Button> : null}
+      {canPromptInstall ? (
+        <Button onClick={() => void handleInstallClick()}>{m.you.install.install}</Button>
+      ) : null}
     </Card>
   );
 }

@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { showToast } from '@/components/ui/Toast';
+import { useMessages } from '@/lib/i18n';
 import { runExport } from './DataSection';
 
 export type DangerZoneProps = {
@@ -24,6 +25,7 @@ export type DangerZoneProps = {
  */
 export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
   const router = useRouter();
+  const m = useMessages();
 
   const [expanded, setExpanded] = useState(false);
   const [freshStartOpen, setFreshStartOpen] = useState(false);
@@ -41,10 +43,10 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
       const now = new Date();
       await store.saveProfile({ ...profile, quitAt: toLocalIso(now), updatedAt: toLocalIso(now) });
       setFreshStartOpen(false);
-      showToast('Fresh start. Day zero, on purpose.');
+      showToast(m.you.dangerZone.freshStartDone);
     } catch (err) {
       console.error('Unsmoke: failed to start a fresh quit', err);
-      showToast("Couldn't save — please try again.");
+      showToast(m.common.saveFailed);
     } finally {
       setFreshStartBusy(false);
     }
@@ -55,10 +57,10 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
     setExportingFirst(true);
     try {
       await runExport(store, preferences);
-      showToast('Exported');
+      showToast(m.you.data.exported);
     } catch (err) {
       console.error('Unsmoke: failed to export data', err);
-      showToast("Couldn't export — please try again.");
+      showToast(m.you.data.couldNotExport);
     } finally {
       setExportingFirst(false);
     }
@@ -83,7 +85,7 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
       router.replace('/welcome');
     } catch (err) {
       console.error('Unsmoke: failed to erase data', err);
-      showToast("Couldn't erase — please try again.");
+      showToast(m.you.dangerZone.couldNotErase);
       setErasing(false);
       setEraseArmed(false);
     }
@@ -102,7 +104,7 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
         aria-expanded={expanded}
         className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
       >
-        <span className="text-[15px] font-semibold text-danger">Danger zone</span>
+        <span className="text-[15px] font-semibold text-danger">{m.you.dangerZone.title}</span>
         <span aria-hidden="true" className="text-ink-faint">
           {expanded ? '−' : '+'}
         </span>
@@ -111,7 +113,7 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
       {expanded ? (
         <div className="flex flex-col gap-2 border-t border-border pt-3">
           <Button variant="secondary" fullWidth onClick={() => setFreshStartOpen(true)}>
-            Start a fresh quit
+            {m.you.dangerZone.startFreshQuit}
           </Button>
           <Button
             variant="danger"
@@ -121,41 +123,44 @@ export function DangerZone({ profile, preferences, store }: DangerZoneProps) {
               setEraseOpen(true);
             }}
           >
-            Erase everything
+            {m.you.dangerZone.eraseEverything}
           </Button>
         </div>
       ) : null}
 
-      <Sheet open={freshStartOpen} onClose={() => setFreshStartOpen(false)} title="Start a fresh quit">
+      <Sheet
+        open={freshStartOpen}
+        onClose={() => setFreshStartOpen(false)}
+        title={m.you.dangerZone.freshStartTitle}
+      >
         <div className="flex flex-col gap-4 pb-2">
-          <p className="text-[14px] leading-relaxed text-ink">
-            Sets a new quit moment starting now. Your craving history, achievements and money
-            totals stay. Your smoke-free clock and health timeline restart.
-          </p>
+          <p className="text-[14px] leading-relaxed text-ink">{m.you.dangerZone.freshStartBody}</p>
           <Button fullWidth onClick={() => void handleFreshStart()} disabled={freshStartBusy}>
-            {freshStartBusy ? 'Starting…' : 'Start fresh'}
+            {freshStartBusy ? m.you.dangerZone.starting : m.you.dangerZone.startFresh}
           </Button>
           <Button variant="ghost" fullWidth onClick={() => setFreshStartOpen(false)}>
-            Cancel
+            {m.you.dangerZone.cancel}
           </Button>
         </div>
       </Sheet>
 
-      <Sheet open={eraseOpen} onClose={closeEraseSheet} title="Erase everything">
+      <Sheet open={eraseOpen} onClose={closeEraseSheet} title={m.you.dangerZone.eraseTitle}>
         <div className="flex flex-col gap-4 pb-2">
-          <p className="text-[14px] leading-relaxed text-ink">
-            Deletes all data on this device permanently. Export first if you want a backup.
-          </p>
+          <p className="text-[14px] leading-relaxed text-ink">{m.you.dangerZone.eraseBody}</p>
           <Button
             variant="secondary"
             fullWidth
             onClick={() => void handleExportFirst()}
             disabled={exportingFirst || erasing}
           >
-            {exportingFirst ? 'Exporting…' : 'Export first'}
+            {exportingFirst ? m.you.dangerZone.exporting : m.you.dangerZone.exportFirst}
           </Button>
           <Button variant="danger" fullWidth onClick={handleEraseTap} disabled={erasing}>
-            {erasing ? 'Erasing…' : eraseArmed ? 'Tap again to erase' : 'Erase'}
+            {erasing
+              ? m.you.dangerZone.erasing
+              : eraseArmed
+                ? m.you.dangerZone.tapAgainToErase
+                : m.you.dangerZone.erase}
           </Button>
         </div>
       </Sheet>

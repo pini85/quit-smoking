@@ -3,8 +3,9 @@
 import { useMemo } from 'react';
 import type { CravingSession, Trigger } from '@/domain/types';
 import { perTriggerStats } from '@/domain/stats/cravingStats';
-import { TRIGGER_META, TRIGGER_ORDER } from '@/data/triggers';
+import { TRIGGER_META, TRIGGER_ORDER, triggerLabel } from '@/data/triggers';
 import { BarList, type BarListItem } from '@/components/charts/BarList';
+import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { GatedCard } from './GatedCard';
 
 export type TriggersSectionProps = {
@@ -18,6 +19,8 @@ export type TriggersSectionProps = {
  * deterministic rather than depending on object key iteration order).
  */
 export function TriggersSection({ sessions }: TriggersSectionProps) {
+  const { locale } = useLocale();
+  const m = useMessages();
   const { gateMet, items } = useMemo(() => {
     const perTrig = perTriggerStats(sessions);
     const entries = Object.entries(perTrig) as [
@@ -37,22 +40,22 @@ export function TriggersSection({ sessions }: TriggersSectionProps) {
       const pct = totalTagged > 0 ? Math.round((s.total / totalTagged) * 100) : 0;
       const passPct = s.rate === null ? '—' : `${Math.round(s.rate * 100)}%`;
       return {
-        label: `${meta.emoji} ${meta.label}`,
+        label: `${meta.emoji} ${triggerLabel(trigger, locale)}`,
         value: s.total,
-        sub: `${pct}% of tagged · ${passPct} passed`,
+        sub: interpolate(m.progress.triggers.subLine, { pct, passPct }),
       };
     });
 
     return { gateMet, items };
-  }, [sessions]);
+  }, [sessions, locale, m.progress.triggers.subLine]);
 
   return (
     <GatedCard
-      title="Triggers"
+      title={m.progress.triggers.title}
       gateMet={gateMet}
-      emptyCopy="Tag a few cravings with what set them off, and your patterns show up here. Most people are surprised by their real #1 trigger."
+      emptyCopy={m.progress.triggers.empty}
     >
-      <BarList items={items} ariaLabel="Cravings by trigger, with share of tagged cravings and pass rate" />
+      <BarList items={items} ariaLabel={m.progress.triggers.ariaLabel} />
     </GatedCard>
   );
 }

@@ -4,7 +4,10 @@ import { home } from './home';
 import { craving } from './craving';
 import { freedom } from './freedom';
 import { brain } from './brain';
+import { welcome } from './welcome';
 import { you } from './you';
+import { progress } from './progress';
+import { health } from './health';
 
 /**
  * The English dictionary is the schema: `Messages` is inferred from it, and
@@ -19,7 +22,10 @@ export const en = {
   craving,
   freedom,
   brain,
+  welcome,
   you,
+  progress,
+  health,
 };
 
 export type Messages = typeof en;

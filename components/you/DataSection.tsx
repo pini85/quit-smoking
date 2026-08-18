@@ -10,7 +10,7 @@ import { getAppRepositories } from '@/lib/services/appDb';
 import type { DataStore } from '@/lib/services/dataStore';
 import { toLocalIso } from '@/lib/utils/iso';
 import { defaultPreferences } from '@/lib/utils/preferences';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages, type Messages } from '@/lib/i18n';
 import { dateFmt } from '@/lib/i18n/fmt';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -52,25 +52,31 @@ function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
 }
 
+type PluralWord = { one: string; other: string };
+
+function plural(n: number, word: PluralWord): string {
+  return `${n} ${n === 1 ? word.one : word.other}`;
+}
+
 /**
  * "3 belief check-ins and 1 freedom session", or `null` when the file brings
  * neither. Named only when non-zero, matching how the sentence above it
  * already treats the adopted profile — a v1 backup carries no belief or
  * freedom rows at all, and announcing two zeroes would just be noise.
  */
-function newFreedomWork(summary: MergeSummary): string | null {
+function newFreedomWork(
+  summary: MergeSummary,
+  m: Messages['you']['data'],
+  andJoiner: string
+): string | null {
   const parts: string[] = [];
   if (summary.newBeliefAssessments > 0) {
-    parts.push(
-      `${summary.newBeliefAssessments} belief check-in${summary.newBeliefAssessments === 1 ? '' : 's'}`
-    );
+    parts.push(plural(summary.newBeliefAssessments, m.newBeliefCheckin));
   }
   if (summary.newFreedomSessions > 0) {
-    parts.push(
-      `${summary.newFreedomSessions} freedom session${summary.newFreedomSessions === 1 ? '' : 's'}`
-    );
+    parts.push(plural(summary.newFreedomSessions, m.newFreedomSession));
   }
-  return parts.length > 0 ? parts.join(' and ') : null;
+  return parts.length > 0 ? parts.join(andJoiner) : null;
 }
 
 type PendingImport = { file: ExportFileV2; summary: MergeSummary };
@@ -82,13 +88,16 @@ type PendingImport = { file: ExportFileV2; summary: MergeSummary };
  */
 export function DataSection({ preferences, cravings, store, now }: DataSectionProps) {
   const { locale } = useLocale();
+  const m = useMessages();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [exporting, setExporting] = useState(false);
   const [pending, setPending] = useState<PendingImport | null>(null);
   const [confirmingReplace, setConfirmingReplace] = useState(false);
   const [importing, setImporting] = useState(false);
 
-  const pendingFreedomWork = pending ? newFreedomWork(pending.summary) : null;
+  const pendingFreedomWork = pending
+    ? newFreedomWork(pending.summary, m.you.data, m.common.andJoiner)
+    : null;
   const lastExportAt = preferences?.lastExportAt ?? null;
   const staleExport =
     cravings.length > 0 &&
@@ -99,10 +108,10 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
     setExporting(true);
     try {
       await runExport(store, preferences);
-      showToast('Exported');
+      showToast(m.you.data.exported);
     } catch (err) {
       console.error('Unsmoke: failed to export data', err);
-      showToast("Couldn't export — please try again.");
+      showToast(m.you.data.couldNotExport);
     } finally {
       setExporting(false);
     }
@@ -126,7 +135,7 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
       setPending({ file: parsedFile, summary });
     } catch (err) {
       console.error('Unsmoke: failed to read import file', err);
-      showToast(importErrorMessage(err, 'Could not read that file.'));
+      showToast(importErrorMessage(err, m.you.data.couldNotRead));
     }
   }
 
@@ -139,14 +148,14 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
       await store.refresh();
       setPending(null);
       setConfirmingReplace(false);
-      const parts = [`${summary.newCravings} new craving${summary.newCravings === 1 ? '' : 's'}`];
-      const freedomWork = newFreedomWork(summary);
+      const parts = [plural(summary.newCravings, m.you.data.newCraving)];
+      const freedomWork = newFreedomWork(summary, m.you.data, m.common.andJoiner);
       if (freedomWork) parts.push(freedomWork);
-      if (summary.profileAdopted) parts.push('profile adopted');
-      showToast(`Imported — ${parts.join(', ')}.`);
+      if (summary.profileAdopted) parts.push(m.you.data.profileAdopted);
+      showToast(interpolate(m.you.data.imported, { parts: parts.join(', ') }));
     } catch (err) {
       console.error('Unsmoke: failed to apply import', err);
-      showToast(importErrorMessage(err, 'Could not import that file.'));
+      showToast(importErrorMessage(err, m.you.data.couldNotImport));
     } finally {
       setImporting(false);
     }
@@ -160,28 +169,32 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
   return (
     <Card className="flex flex-col gap-4">
       <div>
-        <h2 className="text-[15px] font-semibold text-ink">Your data</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{m.you.data.title}</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-muted">
-          No account exists. This file IS your backup.
+          {m.you.data.noAccountNote}
         </p>
         {lastExportAt ? (
           <p className="mt-1 text-[12px] text-ink-faint">
-            Last export: {dateFmt(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastExportAt))}
+            {interpolate(m.you.data.lastExport, {
+              date: dateFmt(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+                new Date(lastExportAt)
+              ),
+            })}
           </p>
         ) : null}
         {staleExport ? (
           <p className="mt-2 rounded-card bg-accent-soft px-3 py-2 text-[12px] leading-relaxed text-ink-muted">
-            It&apos;s been a while — export a fresh backup.
+            {m.you.data.staleExportNote}
           </p>
         ) : null}
       </div>
 
       <div className="flex gap-2">
         <Button variant="secondary" fullWidth onClick={() => void handleExport()} disabled={exporting}>
-          {exporting ? 'Exporting…' : 'Export'}
+          {exporting ? m.you.data.exporting : m.you.data.export}
         </Button>
         <Button variant="secondary" fullWidth onClick={handlePickFile}>
-          Import
+          {m.you.data.import}
         </Button>
       </div>
       <input
@@ -190,25 +203,31 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
         accept=".json,application/json"
         onChange={(event) => void handleFileChange(event)}
         className="hidden"
-        aria-label="Choose a backup file to import"
+        aria-label={m.you.data.importAriaLabel}
       />
 
-      <Sheet open={pending !== null} onClose={closeImportSheet} title="Import backup">
+      <Sheet open={pending !== null} onClose={closeImportSheet} title={m.you.data.sheetTitle}>
         {pending ? (
           <div className="flex flex-col gap-4 pb-2">
             <p className="text-[14px] leading-relaxed text-ink">
-              {pending.file.cravings.length} craving{pending.file.cravings.length === 1 ? '' : 's'} in
-              file, {pending.summary.newCravings} new to this device.
-              {pendingFreedomWork ? ` Also new here: ${pendingFreedomWork}.` : ''}
-              {pending.summary.profileAdopted
-                ? ' No profile on this device yet — the file’s profile will be adopted.'
+              {interpolate(m.you.data.cravingsInFile, {
+                count: pending.file.cravings.length,
+                craving:
+                  pending.file.cravings.length === 1
+                    ? m.you.data.cravingWord.one
+                    : m.you.data.cravingWord.other,
+                newCount: pending.summary.newCravings,
+              })}
+              {pendingFreedomWork
+                ? interpolate(m.you.data.alsoNewHere, { work: pendingFreedomWork })
                 : ''}
+              {pending.summary.profileAdopted ? m.you.data.noProfileYet : ''}
             </p>
 
             {!confirmingReplace ? (
               <div className="flex flex-col gap-2">
                 <Button fullWidth onClick={() => void runImport('merge')} disabled={importing}>
-                  Merge (recommended)
+                  {m.you.data.merge}
                 </Button>
                 <Button
                   variant="secondary"
@@ -216,19 +235,19 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
                   onClick={() => setConfirmingReplace(true)}
                   disabled={importing}
                 >
-                  Replace everything on this device
+                  {m.you.data.replaceEverything}
                 </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
                 <p className="text-[13px] leading-relaxed text-ink-muted">
-                  This overwrites this device&apos;s history with the file. Sure?
+                  {m.you.data.overwriteWarning}
                 </p>
                 <Button fullWidth onClick={() => void runImport('replace')} disabled={importing}>
-                  {importing ? 'Replacing…' : 'Yes, replace'}
+                  {importing ? m.you.data.replacing : m.you.data.yesReplace}
                 </Button>
                 <Button variant="ghost" fullWidth onClick={() => setConfirmingReplace(false)}>
-                  Cancel
+                  {m.you.data.cancel}
                 </Button>
               </div>
             )}

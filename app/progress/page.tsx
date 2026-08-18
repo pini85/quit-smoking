@@ -11,6 +11,7 @@ import { TriggersSection } from '@/components/progress/TriggersSection';
 import { TimeOfDaySection } from '@/components/progress/TimeOfDaySection';
 import { InsightsFeed } from '@/components/progress/InsightsFeed';
 import { HistoryList } from '@/components/progress/HistoryList';
+import { useMessages } from '@/lib/i18n';
 
 function Skeleton() {
   return (
@@ -39,6 +40,7 @@ function Skeleton() {
 export default function ProgressPage() {
   const { data } = useAppData();
   const now = useNow(60000);
+  const m = useMessages();
 
   const profile = data.profile;
   const quitAtMs = profile ? new Date(profile.quitAt).getTime() : null;
@@ -54,7 +56,7 @@ export default function ProgressPage() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
-      <h1 className="text-[24px] font-semibold tracking-tight text-ink">Progress</h1>
+      <h1 className="text-[24px] font-semibold tracking-tight text-ink">{m.progress.pageTitle}</h1>
 
       <CravingDeclineSection sessions={sessions} quitAt={quitAt} now={nowMinute} />
       <PassRateSection sessions={sessions} now={nowMinute} />

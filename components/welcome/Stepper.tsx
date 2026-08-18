@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
+import { interpolate, useMessages } from '@/lib/i18n';
 
 export type StepperProps = {
   label: string;
@@ -29,6 +30,7 @@ function format(n: number, decimals: number): string {
  * to [min, max], rounded to `decimals`, and committed via `onChange`.
  */
 export function Stepper({ label, value, onChange, min, max, step = 1, decimals = 0 }: StepperProps) {
+  const m = useMessages();
   const [text, setText] = useState(() => format(value, decimals));
   // Tracks the last `value` the field was synced to, so a prop change
   // (±buttons, or a parent reset) can be reflected in `text` by adjusting
@@ -67,7 +69,7 @@ export function Stepper({ label, value, onChange, min, max, step = 1, decimals =
           type="button"
           onClick={dec}
           disabled={value <= min}
-          aria-label={`Decrease ${label}`}
+          aria-label={interpolate(m.common.stepper.decrease, { label })}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-button border border-border bg-surface text-lg font-medium text-ink transition-transform duration-[var(--dur-press)] active:scale-[0.95] disabled:pointer-events-none disabled:opacity-40"
         >
           −
@@ -85,7 +87,7 @@ export function Stepper({ label, value, onChange, min, max, step = 1, decimals =
           type="button"
           onClick={inc}
           disabled={value >= max}
-          aria-label={`Increase ${label}`}
+          aria-label={interpolate(m.common.stepper.increase, { label })}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-button border border-border bg-surface text-lg font-medium text-ink transition-transform duration-[var(--dur-press)] active:scale-[0.95] disabled:pointer-events-none disabled:opacity-40"
         >
           +

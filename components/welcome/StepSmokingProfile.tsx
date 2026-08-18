@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/Button';
+import { useMessages } from '@/lib/i18n';
 import { Stepper } from './Stepper';
 
 // Common ISO 4217 codes, per brief.
@@ -45,34 +46,35 @@ export function StepSmokingProfile({
   onBack,
   onContinue,
 }: StepSmokingProfileProps) {
+  const m = useMessages();
   return (
     <div className="flex flex-1 flex-col gap-6">
       <div>
         <Button variant="ghost" onClick={onBack} className="-ml-2 mb-2 px-2">
-          Back
+          {m.welcome.smokingProfile.back}
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          Your smoking, in numbers.
+          {m.welcome.smokingProfile.headline}
         </h1>
       </div>
 
       <div className="flex flex-col gap-6">
         <Stepper
-          label="Cigarettes per day"
+          label={m.welcome.smokingProfile.cigarettesPerDay}
           value={cigarettesPerDay}
           onChange={onCigarettesPerDayChange}
           min={1}
           max={100}
         />
         <Stepper
-          label="Cigarettes per pack"
+          label={m.welcome.smokingProfile.cigarettesPerPack}
           value={cigarettesPerPack}
           onChange={onCigarettesPerPackChange}
           min={1}
           max={60}
         />
         <Stepper
-          label="Price per pack"
+          label={m.welcome.smokingProfile.pricePerPack}
           value={packPrice}
           onChange={onPackPriceChange}
           min={0}
@@ -83,7 +85,7 @@ export function StepSmokingProfile({
 
         <div>
           <label htmlFor="currency" className="mb-2 block text-sm font-medium text-ink">
-            Currency
+            {m.welcome.smokingProfile.currency}
           </label>
           <select
             id="currency"
@@ -100,13 +102,11 @@ export function StepSmokingProfile({
         </div>
       </div>
 
-      <p className="text-xs text-ink-faint">
-        Used only to calculate what you&apos;re getting back. Stays on this phone.
-      </p>
+      <p className="text-xs text-ink-faint">{m.welcome.smokingProfile.usedOnlyNote}</p>
 
       <div className="mt-auto pb-6">
         <Button fullWidth size="lg" onClick={onContinue}>
-          Continue
+          {m.welcome.smokingProfile.continue}
         </Button>
       </div>
     </div>

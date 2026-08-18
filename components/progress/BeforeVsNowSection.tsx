@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { CravingSession } from '@/domain/types';
 import { firstWeekVsThisWeek, type WeekStats } from '@/domain/stats/cravingStats';
+import { useMessages } from '@/lib/i18n';
 import { GatedCard } from './GatedCard';
 
 export type BeforeVsNowSectionProps = {
@@ -27,6 +28,7 @@ function statLine(stats: WeekStats): string {
  * sparse).
  */
 export function BeforeVsNowSection({ sessions, quitAt, now }: BeforeVsNowSectionProps) {
+  const m = useMessages();
   const { gateMet, firstWeek, thisWeek } = useMemo(() => {
     const result = firstWeekVsThisWeek(sessions, quitAt, now);
     const gateMet = result !== null && result.firstWeek.count >= 1 && result.thisWeek.count >= 1;
@@ -39,15 +41,15 @@ export function BeforeVsNowSection({ sessions, quitAt, now }: BeforeVsNowSection
 
   return (
     <GatedCard
-      title="Before vs now"
+      title={m.progress.beforeVsNow.title}
       gateMet={gateMet}
-      emptyCopy="Two weeks in, you'll see week one and this week side by side. Improvement you can point at."
+      emptyCopy={m.progress.beforeVsNow.empty}
     >
       {firstWeek && thisWeek ? (
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-              Week one
+              {m.progress.beforeVsNow.weekOne}
             </p>
             <p className="text-[14px] leading-relaxed tabular-nums text-ink">
               {statLine(firstWeek)}
@@ -55,7 +57,7 @@ export function BeforeVsNowSection({ sessions, quitAt, now }: BeforeVsNowSection
           </div>
           <div className="flex flex-col gap-1">
             <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-              This week
+              {m.progress.beforeVsNow.thisWeek}
             </p>
             <p className="text-[14px] leading-relaxed tabular-nums text-ink">
               {statLine(thisWeek)}

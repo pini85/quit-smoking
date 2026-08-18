@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import type { CravingSession } from '@/domain/types';
 import { cravingCounts } from '@/domain/stats/cravingStats';
+import { interpolate, useMessages } from '@/lib/i18n';
 import { GatedCard } from './GatedCard';
 
 const FOURTEEN_DAYS_MS = 14 * 86_400_000;
@@ -22,6 +23,7 @@ export type PassRateSectionProps = {
  * trend.
  */
 export function PassRateSection({ sessions, now }: PassRateSectionProps) {
+  const m = useMessages();
   const { gateMet, pct, passed, resolved, arrow } = useMemo(() => {
     const counts = cravingCounts(sessions);
     const gateMet = counts.resolved >= 5;
@@ -63,18 +65,18 @@ export function PassRateSection({ sessions, now }: PassRateSectionProps) {
   const arrowGlyph = arrow === 'up' ? '↑' : arrow === 'down' ? '↓' : arrow === 'flat' ? '→' : null;
   const arrowLabel =
     arrow === 'up'
-      ? 'improving versus the prior 14 days'
+      ? m.progress.passRate.improving
       : arrow === 'down'
-        ? 'declining versus the prior 14 days'
+        ? m.progress.passRate.declining
         : arrow === 'flat'
-          ? 'flat versus the prior 14 days'
+          ? m.progress.passRate.flat
           : undefined;
 
   return (
     <GatedCard
-      title="Pass rate"
+      title={m.progress.passRate.title}
       gateMet={gateMet}
-      emptyCopy="Five logged cravings unlock your pass rate. Most people are surprised how high it is."
+      emptyCopy={m.progress.passRate.empty}
     >
       <div className="flex flex-col gap-1">
         <div className="flex items-baseline gap-2">
@@ -88,7 +90,7 @@ export function PassRateSection({ sessions, now }: PassRateSectionProps) {
           ) : null}
         </div>
         <p className="text-[13px] leading-relaxed text-ink-muted">
-          {passed} of {resolved} passed without smoking
+          {interpolate(m.progress.passRate.passedOf, { passed, resolved })}
         </p>
       </div>
     </GatedCard>

@@ -10,10 +10,11 @@ import type {
 } from '@/domain/types';
 import { ACHIEVEMENT_DEFINITIONS } from '@/domain/achievements/definitions';
 import { progressToward, type AchievementContext } from '@/domain/achievements/engine';
-import { TRIGGER_META } from '@/data/triggers';
+import { triggerLabel } from '@/data/triggers';
 import { sweepAchievements } from '@/lib/services/achievementSweep';
-import { useLocale } from '@/lib/i18n';
+import { interpolate, useLocale, useMessages, type Messages } from '@/lib/i18n';
 import { dateFmt } from '@/lib/i18n/fmt';
+import type { Locale } from '@/domain/types';
 import type { DataStore } from '@/lib/services/dataStore';
 import { Card } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
@@ -34,22 +35,29 @@ export type AchievementsGridProps = {
  * fixed condition text. Takes only the condition, deliberately: this is
  * fact-of-the-badge copy, not something that depends on the user's data.
  */
-export function criteriaText(cond: AchievementCondition): string {
+export function criteriaText(
+  cond: AchievementCondition,
+  m: Messages['you']['achievements'],
+  locale: Locale = 'en'
+): string {
   switch (cond.type) {
     case 'smoke-free-hours':
-      return `${cond.hours} hours smoke-free`;
+      return interpolate(m.criteria.smokeFreeHours, { hours: cond.hours });
     case 'cigarettes-avoided':
-      return `${cond.count} cigarettes not smoked`;
+      return interpolate(m.criteria.cigarettesAvoided, { count: cond.count });
     case 'money-saved':
-      return `${cond.amount} saved`;
+      return interpolate(m.criteria.moneySaved, { amount: cond.amount });
     case 'cravings-passed':
-      return `${cond.count} cravings passed`;
+      return interpolate(m.criteria.cravingsPassed, { count: cond.count });
     case 'trigger-passed':
-      return `Pass ${cond.count} ${TRIGGER_META[cond.trigger].label.toLowerCase()} cravings`;
+      return interpolate(m.criteria.triggerPassed, {
+        count: cond.count,
+        trigger: triggerLabel(cond.trigger, locale).toLowerCase(),
+      });
     case 'craving-free-hours':
-      return `${cond.hours} quiet hours`;
+      return interpolate(m.criteria.cravingFreeHours, { hours: cond.hours });
     case 'smoke-free-weekend':
-      return 'A full smoke-free weekend';
+      return m.criteria.smokeFreeWeekend;
   }
 }
 
@@ -65,6 +73,7 @@ function AchievementTile({
   onOpen: () => void;
 }) {
   const { locale } = useLocale();
+  const m = useMessages();
   if (unlockedAt !== null) {
     return (
       <button
@@ -93,7 +102,9 @@ function AchievementTile({
     <div className="flex min-h-[104px] flex-col justify-between gap-2 rounded-card border border-border bg-surface p-3 text-left">
       <span className="text-[13px] font-semibold leading-snug text-ink-muted">{def.title}</span>
       <div className="flex flex-col gap-1.5">
-        <span className="text-[11px] leading-snug text-ink-muted">{criteriaText(def.condition)}</span>
+        <span className="text-[11px] leading-snug text-ink-muted">
+          {criteriaText(def.condition, m.you.achievements, locale)}
+        </span>
         <ProgressBar value={pct} className="h-1" />
       </div>
     </div>
@@ -113,6 +124,7 @@ function AchievementTile({
  */
 export function AchievementsGrid({ profile, cravings, unlocks, store, now }: AchievementsGridProps) {
   const { locale } = useLocale();
+  const m = useMessages();
   const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -137,7 +149,7 @@ export function AchievementsGrid({ profile, cravings, unlocks, store, now }: Ach
   return (
     <Card className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-ink">Achievements</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{m.you.achievements.title}</h2>
         <span className="text-[13px] tabular-nums text-ink-muted">
           {unlockedMap.size}/{ACHIEVEMENT_DEFINITIONS.length}
         </span>
@@ -160,7 +172,9 @@ export function AchievementsGrid({ profile, cravings, unlocks, store, now }: Ach
           <div className="flex flex-col gap-3 pb-2">
             <p className="text-[15px] leading-relaxed text-ink-muted">{openDef.fact}</p>
             <p className="text-[13px] text-ink-faint">
-              Unlocked {dateFmt(locale, { dateStyle: 'medium' }).format(new Date(openUnlockedAt))}
+              {interpolate(m.you.achievements.unlockedOn, {
+                date: dateFmt(locale, { dateStyle: 'medium' }).format(new Date(openUnlockedAt)),
+              })}
             </p>
           </div>
         ) : null}

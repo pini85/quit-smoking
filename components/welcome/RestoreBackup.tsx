@@ -9,11 +9,18 @@ import type { DataStore } from '@/lib/services/dataStore';
 import { Button } from '@/components/ui/Button';
 import { Sheet } from '@/components/ui/Sheet';
 import { showToast } from '@/components/ui/Toast';
+import { useMessages, type Messages } from '@/lib/i18n';
 
 export type RestoreBackupProps = { store: DataStore };
 
 function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
+}
+
+type PluralWord = { one: string; other: string };
+
+function plural(n: number, word: PluralWord): string {
+  return `${n} ${n === 1 ? word.one : word.other}`;
 }
 
 /**
@@ -24,15 +31,15 @@ function importErrorMessage(err: unknown, fallback: string): string {
  * counts join on the same terms. A migrated v1 file legitimately reports zero
  * for both — those collections did not exist in v1.
  */
-function countLine(file: ExportFileV2): string {
+function countLine(file: ExportFileV2, m: Messages['welcome']['restoreBackup']): string {
   const parts = [
-    `${file.cravings.length} craving${file.cravings.length === 1 ? '' : 's'}`,
-    `${file.reasons.length} reason${file.reasons.length === 1 ? '' : 's'}`,
-    `${file.achievementUnlocks.length} badge${file.achievementUnlocks.length === 1 ? '' : 's'}`,
-    `${file.beliefAssessments.length} belief check-in${file.beliefAssessments.length === 1 ? '' : 's'}`,
-    `${file.freedomSessions.length} freedom session${file.freedomSessions.length === 1 ? '' : 's'}`,
+    plural(file.cravings.length, m.craving),
+    plural(file.reasons.length, m.reason),
+    plural(file.achievementUnlocks.length, m.badge),
+    plural(file.beliefAssessments.length, m.beliefCheckin),
+    plural(file.freedomSessions.length, m.freedomSession),
   ];
-  return `${file.profile ? 'Profile, ' : 'No profile, '}${parts.join(', ')}.`;
+  return `${file.profile ? m.profileWord : m.noProfileWord}${parts.join(', ')}.`;
 }
 
 /**
@@ -48,6 +55,7 @@ function countLine(file: ExportFileV2): string {
  * file leaves this empty device exactly as empty as it was.
  */
 export function RestoreBackup({ store }: RestoreBackupProps) {
+  const m = useMessages();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<ExportFileV2 | null>(null);
@@ -65,7 +73,7 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
       setPending(file);
     } catch (err) {
       console.error('Unsmoke: failed to read backup file', err);
-      showToast(importErrorMessage(err, 'Could not read that file.'));
+      showToast(importErrorMessage(err, m.welcome.restoreBackup.couldNotRead));
     }
   }
 
@@ -80,11 +88,11 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
       await store.refresh();
       setPending(null);
       setOpen(false);
-      showToast('Backup restored', { withRingPulse: true });
+      showToast(m.welcome.restoreBackup.restored, { withRingPulse: true });
       // `restoring` is deliberately left true: this screen is on its way out.
     } catch (err) {
       console.error('Unsmoke: failed to restore backup', err);
-      showToast(importErrorMessage(err, 'Could not restore that backup.'));
+      showToast(importErrorMessage(err, m.welcome.restoreBackup.couldNotRestore));
       setRestoring(false);
     }
   }
@@ -102,22 +110,24 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
         onClick={() => setOpen(true)}
         className="min-h-11 self-center px-2 text-[13px] text-ink-muted underline underline-offset-4"
       >
-        Restoring from a backup?
+        {m.welcome.restoreBackup.link}
       </button>
 
-      <Sheet open={open} onClose={closeSheet} title="Restore a backup">
+      <Sheet open={open} onClose={closeSheet} title={m.welcome.restoreBackup.sheetTitle}>
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[14px] leading-relaxed text-ink-muted">
-            This restores the file onto this empty device.
+            {m.welcome.restoreBackup.sheetBody}
           </p>
 
           {pending ? (
             <>
               <p className="rounded-card bg-surface-raised px-3 py-2 text-[13px] leading-relaxed text-ink">
-                {countLine(pending)}
+                {countLine(pending, m.welcome.restoreBackup)}
               </p>
               <Button fullWidth onClick={() => void handleRestore()} disabled={restoring}>
-                {restoring ? 'Restoring…' : 'Restore this backup'}
+                {restoring
+                  ? m.welcome.restoreBackup.restoring
+                  : m.welcome.restoreBackup.restoreThisBackup}
               </Button>
             </>
           ) : (
@@ -126,7 +136,7 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
               fullWidth
               onClick={() => fileInputRef.current?.click()}
             >
-              Choose backup file
+              {m.welcome.restoreBackup.chooseFile}
             </Button>
           )}
         </div>
@@ -138,7 +148,7 @@ export function RestoreBackup({ store }: RestoreBackupProps) {
         accept=".json,application/json"
         onChange={(event) => void handleFileChange(event)}
         className="hidden"
-        aria-label="Choose a backup file to restore"
+        aria-label={m.welcome.restoreBackup.fileAriaLabel}
       />
     </>
   );

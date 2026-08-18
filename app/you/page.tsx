@@ -2,6 +2,7 @@
 
 import { useAppData } from '@/lib/hooks/useAppData';
 import { useNow } from '@/lib/hooks/useNow';
+import { useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { AchievementsGrid } from '@/components/you/AchievementsGrid';
 import { ProfileSection } from '@/components/you/ProfileSection';
@@ -33,6 +34,7 @@ function Skeleton() {
 export default function YouPage() {
   const { data, store } = useAppData();
   const now = useNow(60_000);
+  const m = useMessages();
 
   if (data.status !== 'ready' || data.profile === null) {
     return <Skeleton />;
@@ -42,7 +44,7 @@ export default function YouPage() {
 
   return (
     <div className="flex flex-col gap-4 pt-2">
-      <h1 className="text-[24px] font-semibold tracking-tight text-ink">You</h1>
+      <h1 className="text-[24px] font-semibold tracking-tight text-ink">{m.chrome.tabs.you}</h1>
 
       <AchievementsGrid
         profile={profile}
