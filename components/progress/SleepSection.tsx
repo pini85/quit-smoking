@@ -7,7 +7,7 @@ import { computeSnoreTrends } from '@/domain/snore/trends';
 import { interpolate, useLocale, useMessages } from '@/lib/i18n';
 import { numberFmt } from '@/lib/i18n/fmt';
 import { Card } from '@/components/ui/Card';
-import { formatVsBaselineCompact } from '@/components/sleep/sleepService';
+import { formatVsBaselineCompact, vsBaselineCurrentBucket } from '@/components/sleep/sleepService';
 
 export type SleepSectionProps = {
   sessions: SleepSession[];
@@ -18,8 +18,10 @@ export type SleepSectionProps = {
 /**
  * /progress entry card for snore monitoring: an honest invitation until at
  * least one night is analyzable, then last night's burden plus the same
- * compact baseline comparison `MorningResults` shows. Always links through
- * to `/sleep`, matching the home screen's `WinsStrip` -> `/progress` idiom.
+ * compact baseline comparison `MorningResults` shows — including the same
+ * `vsBaselineCurrentBucket` attribution, so this card and that one never
+ * describe the identical number differently. Always links through to
+ * `/sleep`, matching the home screen's `WinsStrip` -> `/progress` idiom.
  */
 export function SleepSection({ sessions, quitAt, now }: SleepSectionProps) {
   const { locale } = useLocale();
@@ -51,7 +53,11 @@ export function SleepSection({ sessions, quitAt, now }: SleepSectionProps) {
         </p>
         {burdenComparison ? (
           <p className="text-[13px] leading-relaxed text-ink-muted">
-            {formatVsBaselineCompact(burdenComparison.deltaPercent, m.sleep.results)}
+            {formatVsBaselineCompact(
+              burdenComparison.deltaPercent,
+              vsBaselineCurrentBucket(trends),
+              m.sleep.results
+            )}
           </p>
         ) : null}
         <p className="text-[13px] font-medium text-primary-strong">{m.sleep.progressEntry.cta}</p>

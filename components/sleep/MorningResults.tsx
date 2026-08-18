@@ -7,7 +7,7 @@ import { useLocale, useMessages } from '@/lib/i18n';
 import { numberFmt } from '@/lib/i18n/fmt';
 import { Card } from '@/components/ui/Card';
 import { StatTile } from '@/components/ui/StatTile';
-import { formatSleepDuration, formatVsBaselineCompact } from './sleepService';
+import { formatSleepDuration, formatVsBaselineCompact, vsBaselineCurrentBucket } from './sleepService';
 
 export type MorningResultsProps = {
   session: SleepSession;
@@ -18,10 +18,15 @@ export type MorningResultsProps = {
  * The latest completed night's own stats — shown regardless of whether this
  * night is long enough to count toward `trends` (`MIN_ANALYZABLE_MS` gates
  * baselines/series, not this display). The baseline comparison line only
- * appears when THIS night is the exact one `computeSnoreTrends` used as its
- * current bucket (reference equality against `trends.lastNight`), so a
- * too-short night never borrows a comparison that actually belongs to an
- * older, analyzable one.
+ * appears when THIS night is the most recent analyzable one (reference
+ * equality against `trends.lastNight`), so a too-short night never borrows a
+ * comparison that actually belongs to an older, analyzable one.
+ *
+ * That line's copy names its own near side (`vsBaselineCurrentBucket`),
+ * because the delta is the rolling 7-night mean versus the baseline as soon
+ * as that window is gated in — not this one night versus the baseline, which
+ * is what an unlabelled percentage sitting under this night's stat tiles
+ * would have been read as.
  */
 export function MorningResults({ session, trends }: MorningResultsProps) {
   const { locale } = useLocale();
@@ -71,7 +76,11 @@ export function MorningResults({ session, trends }: MorningResultsProps) {
 
       {burdenComparison ? (
         <p className="text-[13px] leading-relaxed text-ink-muted">
-          {formatVsBaselineCompact(burdenComparison.deltaPercent, m.sleep.results)}
+          {formatVsBaselineCompact(
+            burdenComparison.deltaPercent,
+            vsBaselineCurrentBucket(trends),
+            m.sleep.results
+          )}
         </p>
       ) : null}
     </Card>

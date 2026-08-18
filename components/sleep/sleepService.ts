@@ -7,7 +7,7 @@
  * which this file only ever consumes.
  */
 import type { Locale, SleepSession } from '@/domain/types';
-import type { SnoreComparison } from '@/domain/snore/trends';
+import type { SnoreComparison, SnoreTrends } from '@/domain/snore/trends';
 import { formatCompact } from '@/domain/i18n/units';
 import type { DataStore } from '@/lib/services/dataStore';
 import type { SleepRecorder } from '@/lib/recorder/types';
@@ -43,11 +43,41 @@ export function formatSleepDuration(ms: number, locale: Locale): string {
 }
 
 /**
- * Compact '↓/↑/≈ N% vs. your baseline' line for `MorningResults` and the
+ * Which bucket `computeSnoreTrends` used as the CURRENT side of every
+ * `vsBaseline` comparison. Mirrors that function's own selection rule — the
+ * rolling 7-night window whenever it is gated in, else the last analyzable
+ * night alone — so callers never have to guess (or, worse, assume it is
+ * always last night).
+ */
+export function vsBaselineCurrentBucket(trends: SnoreTrends): 'lastNight' | 'sevenNights' {
+  return trends.sevenNightAvg !== null ? 'sevenNights' : 'lastNight';
+}
+
+/**
+ * Compact '↓/↑/≈ N%' baseline-comparison line for `MorningResults` and the
  * progress entry card — deliberately vague about WHICH baseline (pre-quit
  * or first-nights) so it never implies more than "your own past nights".
+ *
+ * `currentBucket` (from `vsBaselineCurrentBucket`) names the near side
+ * honestly, which the copy used to get wrong: once three nights land inside
+ * the rolling window, `deltaPercent` is the 7-NIGHT MEAN versus the baseline,
+ * not last night versus the baseline — and printing it directly under last
+ * night's own stat tiles as "vs. your baseline" read as a last-night delta it
+ * has never been. Computing a genuine last-night delta instead was the other
+ * option; naming the number that already exists is the honest-and-simple one,
+ * and it also stops two lines derived from the same comparison (here and the
+ * trend section) from disagreeing about what they describe.
  */
-export function formatVsBaselineCompact(deltaPercent: number, m: Messages['sleep']['results']): string {
+export function formatVsBaselineCompact(
+  deltaPercent: number,
+  currentBucket: 'lastNight' | 'sevenNights',
+  m: Messages['sleep']['results']
+): string {
+  if (currentBucket === 'sevenNights') {
+    if (deltaPercent < 0) return interpolate(m.vsBaselineDown7, { percent: Math.abs(deltaPercent) });
+    if (deltaPercent > 0) return interpolate(m.vsBaselineUp7, { percent: deltaPercent });
+    return m.vsBaselineFlat7;
+  }
   if (deltaPercent < 0) return interpolate(m.vsBaselineDown, { percent: Math.abs(deltaPercent) });
   if (deltaPercent > 0) return interpolate(m.vsBaselineUp, { percent: deltaPercent });
   return m.vsBaselineFlat;
