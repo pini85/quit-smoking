@@ -8,6 +8,7 @@ import { welcome } from './welcome';
 import { you } from './you';
 import { progress } from './progress';
 import { health } from './health';
+import { sleep } from './sleep';
 
 /**
  * The English dictionary is the schema: `Messages` is inferred from it, and
@@ -26,6 +27,7 @@ export const en = {
   you,
   progress,
   health,
+  sleep,
 };
 
 export type Messages = typeof en;
