@@ -5,6 +5,11 @@
  * real clock.
  */
 
+// SnoreEvent lives in `domain/types.ts` (it is a stored/exported shape, like
+// SleepSession) — imported (and re-exported below) so detector code can
+// `import type` from a single local module.
+import type { SnoreEvent } from '@/domain/types';
+
 export interface FeatureFrame {
   tMs: number; // offset from recording start
   rmsDbfs: number; // <= 0
@@ -40,7 +45,4 @@ export interface SnoreDetector {
   analyze(frames: FeatureFrame[], opts?: Partial<DetectorOptions>): SnoreAnalysis;
 }
 
-// SnoreEvent lives in `domain/types.ts` (it is a stored/exported shape, like
-// SleepSession) — re-exported here so detector code can `import type` from a
-// single local module.
-export type { SnoreEvent } from '@/domain/types';
+export type { SnoreEvent };
