@@ -27,6 +27,9 @@
   Nothing else is listed: no <include> is present, so these rules are
   exclusions layered on the default "everything else" behaviour, which is what
   keeps this file from becoming a second, drifting inventory of app data.
+
+  This attribute only applies from API 31; `backup_rules.xml` declares the same
+  exclusions in the legacy format for API 26-30. Change both together.
 -->
 <data-extraction-rules>
     <cloud-backup>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The pre-Android-12 half of the same exclusions `data_extraction_rules.xml`
+  declares. `android:dataExtractionRules` only applies from API 31; this app's
+  minSdkVersion is 26, so without this file the snore exclusions would simply
+  not exist on API 26-30 devices (which is exactly what lint's
+  DataExtractionRules check warns about).
+
+  Keep the two files in sync: this is the legacy `<full-backup-content>`
+  format, which has no device-transfer section (that concept arrived with the
+  newer format) and covers cloud/adb backup only. See
+  `data_extraction_rules.xml` for why either file exists at all given
+  allowBackup="false".
+-->
+<full-backup-content>
+    <exclude domain="file" path="snore/" />
+    <exclude domain="sharedpref" path="snore_session.xml" />
+</full-backup-content>

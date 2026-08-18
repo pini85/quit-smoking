@@ -97,11 +97,13 @@ Install it on the test device (`adb install -r app-debug.apk` or sideload).
       its data must stay fully on-device. (Debug builds legitimately do declare
       it, for live reload; check the *release* merged manifest.)
     - The `<application>` tag carries
-      `android:dataExtractionRules="@xml/data_extraction_rules"` alongside
-      `android:allowBackup="false"`, and the referenced XML is present in the
-      APK's `res/xml/` with the `files/snore/` and `snore_session.xml`
-      exclusions intact under **both** `<cloud-backup>` and
-      `<device-transfer>`.
+      `android:dataExtractionRules="@xml/data_extraction_rules"` and
+      `android:fullBackupContent="@xml/backup_rules"` alongside
+      `android:allowBackup="false"`, and both referenced XML files are present
+      in the APK's `res/xml/` with the `files/snore/` and `snore_session.xml`
+      exclusions intact — under **both** `<cloud-backup>` and
+      `<device-transfer>` in the former (the latter is the pre-Android-12
+      equivalent, which this app's minSdkVersion 26 still needs).
 16. **Short nap session.** Record a session under an hour (a nap rather than
     a full night). Confirm it's still analyzed and shown in history, but
     excluded from the trend charts (which should only reflect full-night

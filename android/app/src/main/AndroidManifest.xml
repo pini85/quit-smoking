@@ -4,6 +4,7 @@
     <application
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -18,8 +19,10 @@
              SharedPreferences as excluded from BOTH cloud backup and
              device-to-device transfer (the latter is not governed by
              allowBackup at all), so the audio stays out even if this blanket
-             opt-out is ever flipped. See the rules file for the full
-             reasoning. -->
+             opt-out is ever flipped. fullBackupContent declares the same
+             exclusions in the legacy format, because dataExtractionRules only
+             applies from API 31 and minSdkVersion here is 26. See those two
+             rules files for the full reasoning. -->
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
