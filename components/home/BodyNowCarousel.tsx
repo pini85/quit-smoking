@@ -4,11 +4,12 @@ import type { HealthMilestone } from '@/domain/types';
 import type { MilestoneState } from '@/domain/milestones/engine';
 import { happeningNow, upcomingSoon } from '@/domain/milestones/engine';
 import { Card } from '@/components/ui/Card';
-import { useMessages } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { CATEGORY_META } from '@/components/health/categoryMeta';
+import { CATEGORY_META, categoryLabel } from '@/components/health/categoryMeta';
 import { filterEmerging } from '@/components/health/filterEmerging';
+import { localizedMilestone } from '@/data/healthMilestones';
 
 export type BodyNowCarouselProps = {
   states: MilestoneState[];
@@ -27,8 +28,10 @@ function MilestoneNowCard({
   onOpen: () => void;
 }) {
   const m = useMessages();
+  const { locale } = useLocale();
   const { milestone, progress } = state;
   const category = CATEGORY_META[milestone.category];
+  const text = localizedMilestone(milestone, locale);
 
   return (
     // The width/snap live on a wrapper, not on the Card: Card's own `w-full`
@@ -37,15 +40,15 @@ function MilestoneNowCard({
     <div className="w-[85%] shrink-0 snap-center">
       <Card onClick={onOpen} className="flex h-full flex-col gap-3">
         <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
-          <span aria-hidden="true">{category.emoji}</span> {category.label}
+          <span aria-hidden="true">{category.emoji}</span> {categoryLabel(milestone.category, locale)}
         </p>
 
         <p className="text-[15px] font-semibold leading-snug text-ink">
-          {milestone.title}
+          {text.title}
         </p>
 
         <p className="line-clamp-2 text-[13px] leading-relaxed text-ink-muted">
-          {milestone.description}
+          {text.description}
         </p>
 
         <EvidenceBadge level={milestone.evidenceLevel} className="self-start" />
@@ -56,9 +59,9 @@ function MilestoneNowCard({
           <ProgressBar value={progress} label={m.home.bodyNow.progressLabel} />
         ) : null}
 
-        {milestone.honestNote ? (
+        {text.honestNote ? (
           <p className="rounded-xl bg-accent-soft px-3 py-2 text-[12px] leading-relaxed text-ink-muted">
-            {milestone.honestNote}
+            {text.honestNote}
           </p>
         ) : null}
       </Card>

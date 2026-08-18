@@ -8,6 +8,7 @@ import { Sheet } from '@/components/ui/Sheet';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { CATEGORY_META } from './categoryMeta';
 import { fmt, timingPhrase } from './timingPhrase';
+import { localizedMilestone } from '@/data/healthMilestones';
 
 export type MilestoneSheetProps = {
   /** `null` closes the sheet — lets callers keep one nullable piece of state. */
@@ -44,21 +45,29 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
   const state = milestone ? milestoneState(milestone, quitAt, now) : null;
   const chip = state ? STATUS_CHIP[state.status] : null;
   const elapsed = fmt(Math.max(0, hoursBetween(quitAt, now)), locale);
+  const text = milestone ? localizedMilestone(milestone, locale) : null;
+  // `noTimeline` phrases travel with the localized milestone text rather
+  // than being re-derived by `timingPhrase`, which only ever echoes
+  // `timing.phrase` verbatim — see timingPhrase.ts's own doc comment.
+  const localizedTiming =
+    milestone && text && milestone.timing.kind === 'noTimeline' && text.phrase
+      ? { ...milestone.timing, phrase: text.phrase }
+      : milestone?.timing;
 
   return (
-    <Sheet open={milestone !== null} onClose={onClose} title={milestone?.title}>
-      {milestone && category && chip ? (
+    <Sheet open={milestone !== null} onClose={onClose} title={text?.title}>
+      {milestone && category && chip && text && localizedTiming ? (
         <div className="flex flex-col gap-4 pb-2">
           <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-ink-faint">
             <span aria-hidden="true">{category.emoji}</span> {category.label}
           </p>
 
           <p className="text-[15px] leading-relaxed text-ink-muted">
-            {milestone.description}
+            {text.description}
           </p>
 
           <p className="text-[13px] italic leading-relaxed text-ink-faint">
-            {timingPhrase(milestone.timing, locale)}
+            {timingPhrase(localizedTiming, locale)}
           </p>
 
           <div className="flex flex-col gap-2">
@@ -71,9 +80,9 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
             ) : null}
           </div>
 
-          {milestone.honestNote ? (
+          {text.honestNote ? (
             <p className="rounded-card bg-accent-soft px-4 py-3 text-[13px] leading-relaxed text-ink-muted">
-              {milestone.honestNote}
+              {text.honestNote}
             </p>
           ) : null}
 
@@ -89,7 +98,7 @@ export function MilestoneSheet({ milestone, onClose, quitAt, now }: MilestoneShe
 
             <p className="text-[13px] leading-relaxed text-ink-muted">
               Shown because you&rsquo;re {elapsed} in and this typically occurs{' '}
-              {timingPhrase(milestone.timing, locale)}.
+              {timingPhrase(localizedTiming, locale)}.
             </p>
 
             {milestone.sources.length > 0 ? (

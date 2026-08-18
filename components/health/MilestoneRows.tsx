@@ -4,6 +4,7 @@ import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { humanizeEta } from '@/components/home/humanizeEta';
 import { useLocale } from '@/lib/i18n';
 import { CATEGORY_META } from './categoryMeta';
+import { localizedMilestone } from '@/data/healthMilestones';
 
 /** Compact "arriving soon" card: category, title, and a vague ETA. */
 export function CompactUpcomingCard({
@@ -22,7 +23,9 @@ export function CompactUpcomingCard({
       <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-faint">
         <span aria-hidden="true">{category.emoji}</span> {category.label}
       </p>
-      <p className="text-[14px] font-medium leading-snug text-ink">{milestone.title}</p>
+      <p className="text-[14px] font-medium leading-snug text-ink">
+        {localizedMilestone(milestone, locale).title}
+      </p>
       <p className="text-[12px] text-ink-faint">{humanizeEta(startsInMs ?? 0, locale)}</p>
     </Card>
   );
@@ -36,6 +39,7 @@ export function CompactAchievedRow({
   state: MilestoneState;
   onOpen: () => void;
 }) {
+  const { locale } = useLocale();
   const { milestone } = state;
   const category = CATEGORY_META[milestone.category];
 
@@ -49,7 +53,9 @@ export function CompactAchievedRow({
         ✓
       </span>
       <span className="flex-1 min-w-0">
-        <span className="block truncate text-[13px] font-medium text-ink">{milestone.title}</span>
+        <span className="block truncate text-[13px] font-medium text-ink">
+          {localizedMilestone(milestone, locale).title}
+        </span>
         <span className="block text-[11px] text-ink-faint">
           {category.emoji} {category.label}
         </span>
@@ -83,6 +89,7 @@ export function StatusIcon({ status }: { status: MilestoneStatus }) {
 
 /** One row inside an expanded time-band section: status glyph, title, mini evidence badge. */
 export function TimelineRow({ state, onOpen }: { state: MilestoneState; onOpen: () => void }) {
+  const { locale } = useLocale();
   return (
     <button
       type="button"
@@ -91,7 +98,7 @@ export function TimelineRow({ state, onOpen }: { state: MilestoneState; onOpen: 
     >
       <StatusIcon status={state.status} />
       <span className="min-w-0 flex-1 truncate text-[13px] leading-snug text-ink">
-        {state.milestone.title}
+        {localizedMilestone(state.milestone, locale).title}
       </span>
       <EvidenceBadge level={state.milestone.evidenceLevel} className="shrink-0" />
     </button>

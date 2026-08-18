@@ -1,10 +1,10 @@
 'use client';
 
 import type { HealthMilestone } from '@/domain/types';
-import { HEALTH_MILESTONES } from '@/data/healthMilestones';
+import { HEALTH_MILESTONES, localizedMilestone } from '@/data/healthMilestones';
 import { daysSinceEpoch } from '@/domain/time';
 import { useLocalPref } from '@/lib/hooks/useLocalPref';
-import { useMessages } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 
 const STORAGE_KEY = 'unsmoke.discovery.dismissed';
@@ -33,6 +33,7 @@ export type DiscoveryCardProps = {
  */
 export function DiscoveryCard({ now, onOpenMilestone }: DiscoveryCardProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const { value: dismissedOn, set: setDismissedOn } = useLocalPref(STORAGE_KEY);
 
   const today = localDateKey(now);
@@ -50,6 +51,8 @@ export function DiscoveryCard({ now, onOpenMilestone }: DiscoveryCardProps) {
   ) {
     return null;
   }
+
+  const text = localizedMilestone(milestone, locale);
 
   return (
     <Card className="flex flex-col gap-2">
@@ -78,10 +81,10 @@ export function DiscoveryCard({ now, onOpenMilestone }: DiscoveryCardProps) {
         </button>
       </div>
 
-      <p className="text-[15px] font-semibold leading-snug text-ink">{milestone.title}</p>
+      <p className="text-[15px] font-semibold leading-snug text-ink">{text.title}</p>
 
       <p className="line-clamp-3 text-[13px] leading-relaxed text-ink-muted">
-        {milestone.description}
+        {text.description}
       </p>
 
       <button

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import type { HealthMilestone } from '@/domain/types';
-import { HEALTH_MILESTONES } from '@/data/healthMilestones';
+import { HEALTH_MILESTONES, localizedMilestone } from '@/data/healthMilestones';
 import { computeMilestoneStates, nextMilestone } from '@/domain/milestones/engine';
 import { formatDurationDigital, formatSmokeFreeDuration } from '@/domain/time';
 import { recoveryStageLabel, recoveryStage } from '@/domain/stats/quitStats';
@@ -193,7 +193,7 @@ export function Hero({ quitAt, streakStart, onOpenMilestone }: HeroProps) {
           className="min-h-11 max-w-[30ch] text-balance px-2 text-center text-[13px] leading-relaxed text-ink-muted"
         >
           {interpolate(m.home.hero.next, {
-            title: next.state.milestone.title,
+            title: localizedMilestone(next.state.milestone, locale).title,
             eta: humanizeEta(next.etaMs, locale),
           })}
         </button>

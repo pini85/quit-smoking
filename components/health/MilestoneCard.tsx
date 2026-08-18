@@ -2,8 +2,9 @@ import type { MilestoneState } from '@/domain/milestones/engine';
 import { Card } from '@/components/ui/Card';
 import { EvidenceBadge } from '@/components/ui/EvidenceBadge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { useMessages } from '@/lib/i18n';
+import { useLocale, useMessages } from '@/lib/i18n';
 import { CATEGORY_META } from './categoryMeta';
+import { localizedMilestone } from '@/data/healthMilestones';
 
 export type FullMilestoneCardProps = {
   state: MilestoneState;
@@ -25,8 +26,10 @@ export type FullMilestoneCardProps = {
  */
 export function FullMilestoneCard({ state, onOpen, showEmergingCaveat }: FullMilestoneCardProps) {
   const m = useMessages();
+  const { locale } = useLocale();
   const { milestone, progress } = state;
   const category = CATEGORY_META[milestone.category];
+  const text = localizedMilestone(milestone, locale);
 
   return (
     <Card onClick={onOpen} className="flex flex-col gap-3">
@@ -34,10 +37,10 @@ export function FullMilestoneCard({ state, onOpen, showEmergingCaveat }: FullMil
         <span aria-hidden="true">{category.emoji}</span> {category.label}
       </p>
 
-      <p className="text-[15px] font-semibold leading-snug text-ink">{milestone.title}</p>
+      <p className="text-[15px] font-semibold leading-snug text-ink">{text.title}</p>
 
       <p className="line-clamp-3 text-[13px] leading-relaxed text-ink-muted">
-        {milestone.description}
+        {text.description}
       </p>
 
       <div className="flex flex-col items-start gap-2">
@@ -53,9 +56,9 @@ export function FullMilestoneCard({ state, onOpen, showEmergingCaveat }: FullMil
         <ProgressBar value={progress} label={m.health.milestoneCard.progressLabel} />
       ) : null}
 
-      {milestone.honestNote ? (
+      {text.honestNote ? (
         <p className="rounded-xl bg-accent-soft px-3 py-2 text-[12px] leading-relaxed text-ink-muted">
-          {milestone.honestNote}
+          {text.honestNote}
         </p>
       ) : null}
     </Card>

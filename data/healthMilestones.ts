@@ -6,7 +6,8 @@
  * invent timing precision the source doesn't support — see MilestoneTiming in
  * domain/types.ts for the four honest timing shapes.
  */
-import type { HealthMilestone } from '@/domain/types';
+import type { HealthMilestone, Locale } from '@/domain/types';
+import { FI_HEALTH_MILESTONE_TEXT } from './fi/healthMilestones';
 
 export const HEALTH_MILESTONES: HealthMilestone[] = [
   {
@@ -751,3 +752,45 @@ export const HEALTH_MILESTONES: HealthMilestone[] = [
     sources: [{ label: 'Taylor BMJ 2014', url: 'https://pubmed.ncbi.nlm.nih.gov/24524926/' }],
   },
 ];
+
+export type LocalizedMilestoneText = {
+  title: string;
+  description: string;
+  /** Only set when `milestone.timing.kind === 'noTimeline'`. */
+  phrase?: string;
+  honestNote?: string;
+};
+
+/**
+ * Text-only localized view of a milestone: title/description/honestNote,
+ * plus the noTimeline phrase (if any) so it travels with the localized data
+ * rather than being re-derived by `timingPhrase()`. Falls back to the
+ * English milestone's own fields when no Finnish text exists for an id.
+ */
+export function localizedMilestone(
+  milestone: HealthMilestone,
+  locale: Locale = 'en'
+): LocalizedMilestoneText {
+  const englishPhrase =
+    milestone.timing.kind === 'noTimeline' ? milestone.timing.phrase : undefined;
+
+  if (locale !== 'fi') {
+    return {
+      title: milestone.title,
+      description: milestone.description,
+      phrase: englishPhrase,
+      honestNote: milestone.honestNote,
+    };
+  }
+
+  const fi = FI_HEALTH_MILESTONE_TEXT[milestone.id];
+  if (!fi) {
+    return {
+      title: milestone.title,
+      description: milestone.description,
+      phrase: englishPhrase,
+      honestNote: milestone.honestNote,
+    };
+  }
+  return fi;
+}

@@ -10,6 +10,7 @@ import { useLocale } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { filterEmerging } from './filterEmerging';
 import { TimelineRow } from './MilestoneRows';
+import { localizedMilestone } from '@/data/healthMilestones';
 
 const HOUR_MS = 3_600_000;
 
@@ -47,6 +48,7 @@ function DiscoveriesCard({
   states: MilestoneState[];
   onOpenMilestone: (milestone: HealthMilestone) => void;
 }) {
+  const { locale } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const pool = states.filter((s) => s.milestone.didYouKnow === true);
   const total = pool.length;
@@ -84,7 +86,7 @@ function DiscoveriesCard({
               onClick={() => onOpenMilestone(s.milestone)}
               className="min-h-11 w-full text-left text-[13px] leading-snug text-ink"
             >
-              {s.milestone.title}
+              {localizedMilestone(s.milestone, locale).title}
             </button>
           ))}
           {locked.map((s) => (
