@@ -2,12 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
+        <!-- allowBackup is deliberately false: overnight snore audio (and
+             SessionStore's SharedPreferences metadata about it) must never
+             ride Android's cloud auto-backup. -->
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -33,9 +36,27 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Snore monitoring foreground service. Never exported: only this
+             app (the plugin, and its own notification action) ever starts
+             or stops it. -->
+        <service
+            android:name=".snore.RecordingService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
     </application>
 
     <!-- Permissions -->
 
-    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- INTERNET is intentionally NOT declared here: this app records and
+         analyzes audio entirely on-device, and bedroom audio/metadata must
+         never have a network path out of the device. It is added back only
+         for debug builds (see src/debug/AndroidManifest.xml), where the
+         Capacitor live-reload dev server needs it. -->
 </manifest>

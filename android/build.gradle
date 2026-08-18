@@ -1,7 +1,7 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    
+
     repositories {
         google()
         mavenCentral()
@@ -9,6 +9,13 @@ buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
         classpath 'com.google.gms:google-services:4.4.4'
+        // Capacitor's template is Java-only; the snore-monitoring native plugin
+        // (RecordingService/SessionStore/SnoreMonitorPlugin) is written in
+        // Kotlin, so we add the Kotlin Android plugin here (minimal addition).
+        // (Hardcoded rather than sourced from variables.gradle's `ext` block:
+        // the buildscript {} block's dependencies {} closure does not see
+        // the enclosing script's `ext` properties.)
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.0.21'
 
         // NOTE: Do not place your application dependencies here; they belong
         // in the individual module build.gradle files

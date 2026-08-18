@@ -1,4 +1,7 @@
 apply plugin: 'com.android.application'
+// Added so the snore-monitoring native plugin (Kotlin) can live alongside the
+// template's Java sources (MainActivity.java etc.) without converting them.
+apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
     namespace = "app.unsmoke"
@@ -22,6 +25,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Keep Kotlin's JVM target aligned with compileOptions (set to 21 by
+    // capacitor.build.gradle, applied below) to avoid a jvmTarget mismatch.
+    kotlinOptions {
+        jvmTarget = "21"
+    }
 }
 
 repositories {
@@ -37,6 +45,12 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    // Real org.json implementation for JVM unit tests: without Robolectric
+    // (not set up in this project), the `android.jar` stub's org.json
+    // classes throw at runtime on plain `testDebugUnitTest`. This
+    // testImplementation jar shadows that stub on the unit test classpath so
+    // SessionStateCodec's JSON (de)serialization can actually run.
+    testImplementation "org.json:json:20240303"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

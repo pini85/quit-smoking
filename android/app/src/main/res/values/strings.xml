@@ -4,4 +4,10 @@
     <string name="title_activity_main">Unsmoke</string>
     <string name="package_name">app.unsmoke</string>
     <string name="custom_url_scheme">app.unsmoke</string>
+
+    <!-- Snore monitoring foreground service (RecordingService) -->
+    <string name="snore_notification_channel_name">Snore monitoring</string>
+    <string name="snore_notification_title">Snore monitoring active</string>
+    <string name="snore_notification_text">Recording sleep session</string>
+    <string name="snore_notification_stop_action">Stop</string>
 </resources>

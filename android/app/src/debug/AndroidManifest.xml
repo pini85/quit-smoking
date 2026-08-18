@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug-only manifest overlay, merged only into debug builds. INTERNET is
+     removed from the main manifest (see its comment there) because this
+     app's audio recording/analysis never needs network access, and bedroom
+     audio/metadata must never have a network path out. Debug builds alone
+     get it back here because Capacitor's live-reload dev server (`pnpm dev`
+     talking to the device/emulator) needs it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
