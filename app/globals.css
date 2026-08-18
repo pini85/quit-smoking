@@ -1,26 +1,241 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* =========================================================================
+   Unsmoke design tokens
+   Calm, warm-paper light mode; deep, quiet dark mode. Every component reads
+   colour through these semantic names — never a raw hex.
+   ========================================================================= */
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  /* Surfaces */
+  --canvas: #faf8f4;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: oklch(0.9 0.008 90);
+
+  /* Text */
+  --ink: oklch(0.24 0.02 200);
+  --ink-muted: oklch(0.5 0.02 200);
+  /* 0.62, not 0.65: at 0.65 faint text fell under 3:1 against the soft
+     primary/accent fills it sits on. It is still a clear step below
+     `--ink-muted` and is only ever used for supporting text. */
+  --ink-faint: oklch(0.62 0.015 200);
+
+  /* Brand */
+  --primary: oklch(0.52 0.1 183);
+  --primary-strong: oklch(0.42 0.09 183);
+  --primary-soft: oklch(0.95 0.03 180);
+
+  /* Accent — amber. FAB, highlights and celebration ONLY. */
+  --accent: oklch(0.75 0.13 70);
+  --accent-soft: oklch(0.96 0.04 80);
+
+  /* Status */
+  --positive: oklch(0.62 0.13 160);
+  --caution: oklch(0.7 0.14 60);
+  --danger: oklch(0.58 0.12 25);
+
+  /* The signature ring's unfilled track */
+  --ring-track: oklch(0.92 0.01 180);
+
+  /* ---- Motion. Zeroed wholesale under prefers-reduced-motion. ---- */
+  --dur-fade: 200ms;
+  --dur-ring: 600ms;
+  --dur-pulse: 900ms;
+  --dur-breathe: 6s;
+  --dur-sheet: 280ms;
+  --dur-press: 120ms;
+  /* The intensity cell's acknowledgement bloom. */
+  --dur-bloom: 150ms;
+  /* One full period of the urge-surfing wave. */
+  --dur-wave: 7s;
+  /* How far the breathing ring expands on inhale (1 = no movement). */
+  --ring-breathe-scale: 1.35;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --canvas: oklch(0.17 0.012 190);
+    --surface: oklch(0.21 0.014 190);
+    --surface-raised: oklch(0.25 0.015 190);
+    --border: oklch(0.3 0.015 190);
+
+    --ink: oklch(0.94 0.008 100);
+    --ink-muted: oklch(0.7 0.012 150);
+    --ink-faint: oklch(0.57 0.012 150);
+
+    --primary: oklch(0.72 0.11 178);
+    --primary-strong: oklch(0.8 0.11 178);
+    --primary-soft: oklch(0.26 0.04 183);
+
+    --accent: oklch(0.8 0.13 75);
+    --accent-soft: oklch(0.28 0.05 75);
+
+    --positive: oklch(0.75 0.12 160);
+    --caution: oklch(0.76 0.13 65);
+    --danger: oklch(0.68 0.11 25);
+
+    --ring-track: oklch(0.28 0.015 190);
   }
 }
 
+/* Expose the tokens to Tailwind. `inline` keeps the utilities pointing at the
+   custom properties themselves, so the dark-mode flip above just works. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-positive: var(--positive);
+  --color-caution: var(--caution);
+  --color-danger: var(--danger);
+
+  --color-ring-track: var(--ring-track);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --radius-card: 20px;
+  --radius-button: 16px;
+
+  --animate-fade-in: fade-in var(--dur-fade) ease-out both;
+  --animate-fab-breathe: fab-breathe var(--dur-breathe) ease-in-out infinite;
+  --animate-ring-pulse: ring-pulse var(--dur-pulse) ease-out forwards;
+  --animate-sheet-up: sheet-up var(--dur-sheet) cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-craving-wave: craving-wave var(--dur-wave) linear infinite;
+}
+
+/* ---------------------------- keyframes ---------------------------------- */
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* One expanding, fading stroke — the celebration primitive. Never bounces. */
+@keyframes ring-pulse {
+  from {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+/* Idle breath under the craving FAB: barely perceptible, never playful. */
+@keyframes fab-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+/* Urge surfing: the wave slides one full period, forever, going nowhere —
+   the whole point being that you can watch it instead of fighting it. The
+   amplitude decay is applied inline by the runner, not here. */
+@keyframes craving-wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-200px);
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* ---------------------------- base styles -------------------------------- */
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Countdown arc easing — driven by a token so reduced motion can zero it. */
+.ring-progress-arc {
+  transition: stroke-dashoffset var(--dur-ring) ease-out;
+}
+
+/* Urge-surfing wave: amplitude eases down as the three minutes pass. */
+.craving-wave-amplitude {
+  transition: transform 400ms linear;
+}
+
+/* Breathing ring: the phase duration is supplied per-phase by <Ring/>. */
+.ring-breathe-scale {
+  transition: transform var(--ring-phase-duration, var(--dur-breathe))
+    cubic-bezier(0.37, 0, 0.63, 1);
+  will-change: transform;
+}
+
+/* ------------------------- reduced motion -------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fade: 0ms;
+    --dur-ring: 0ms;
+    --dur-pulse: 0ms;
+    --dur-breathe: 0ms;
+    --dur-sheet: 0ms;
+    --dur-press: 0ms;
+    --dur-bloom: 0ms;
+    /* The breathing ring stops expanding: it simply sits still. */
+    --ring-breathe-scale: 1;
+  }
+
+  /* These rules are unlayered, so they beat Tailwind's utility layer.
+     `animate-pulse` is Tailwind's own (used by the loading skeletons) and
+     is NOT duration-token driven, so it has to be named here too. */
+  .animate-fab-breathe,
+  .animate-ring-pulse,
+  .animate-fade-in,
+  .animate-sheet-up,
+  .animate-craving-wave,
+  .animate-pulse {
+    animation: none;
+  }
+
+  /* The wave stops sliding AND stops shrinking — the runner freezes its
+     amplitude too, so nothing on the screen moves at all. */
+  .craving-wave-amplitude {
+    transition: none;
+  }
+
+  .ring-progress-arc,
+  .ring-breathe-scale {
+    transition: none;
+  }
 }

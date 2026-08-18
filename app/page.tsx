@@ -1,69 +1,122 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useMemo, useState } from 'react';
+import type { HealthMilestone } from '@/domain/types';
+import { HEALTH_MILESTONES } from '@/data/healthMilestones';
+import { computeMilestoneStates } from '@/domain/milestones/engine';
+import { currentStreakStart } from '@/domain/stats/quitStats';
+import { useAppData } from '@/lib/hooks/useAppData';
+import { useNow } from '@/lib/hooks/useNow';
+import { Card } from '@/components/ui/Card';
+import { MilestoneSheet } from '@/components/health/MilestoneSheet';
+import { Hero } from '@/components/home/Hero';
+import { StatsRow } from '@/components/home/StatsRow';
+import { BodyNowCarousel, PreQuitPrepCard } from '@/components/home/BodyNowCarousel';
+import { WinsStrip } from '@/components/home/WinsStrip';
+import { FreedomCard } from '@/components/home/FreedomCard';
+import { DiscoveryCard } from '@/components/home/DiscoveryCard';
+import { SlipCheckinCard } from '@/components/home/SlipCheckinCard';
+
+function Skeleton() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="flex flex-col gap-4 pt-4" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <Card key={i} className="h-32 animate-pulse bg-surface-raised" />
+      ))}
     </div>
+  );
+}
+
+/**
+ * Today — the screen that has to make quitting feel alive.
+ *
+ * The clock is split deliberately: this page ticks once a minute, and only
+ * `<Hero>` subscribes to the one-second clock, so the per-second re-render
+ * never reaches the stats, the carousel or the cards below.
+ */
+export default function TodayPage() {
+  const { data } = useAppData();
+  const now = useNow(60000);
+  const [sheetMilestone, setSheetMilestone] = useState<HealthMilestone | null>(null);
+
+  const profile = data.profile;
+  const quitAtMs = profile ? new Date(profile.quitAt).getTime() : null;
+  const minuteKey = Math.floor(now.getTime() / 60_000);
+
+  // Recomputed once a minute (not once a render) — 80 milestone states is
+  // cheap but not free, and every section below reads the same list.
+  const states = useMemo(() => {
+    if (quitAtMs === null) return [];
+    return computeMilestoneStates(
+      HEALTH_MILESTONES,
+      new Date(quitAtMs),
+      new Date(minuteKey * 60_000)
+    );
+  }, [quitAtMs, minuteKey]);
+
+  // The current streak's anchor: quitAt until something is smoked, the last
+  // slip after that. Only the hero's headline duration uses it — every other
+  // number on this screen is a lifetime-since-quit total.
+  const streakStart = useMemo(() => {
+    if (quitAtMs === null) return null;
+    return currentStreakStart(new Date(quitAtMs), data.cravings);
+  }, [quitAtMs, data.cravings]);
+
+  if (data.status !== 'ready' || profile === null || quitAtMs === null) {
+    return <Skeleton />;
+  }
+
+  const quitAt = new Date(quitAtMs);
+  const preQuit = quitAtMs > now.getTime();
+  const showEmergingEvidence = data.preferences?.showEmergingEvidence ?? true;
+
+  return (
+    <>
+      <div className="flex flex-col gap-4 pt-2">
+        <Hero
+          quitAt={quitAt}
+          streakStart={streakStart ?? quitAt}
+          onOpenMilestone={setSheetMilestone}
+        />
+
+        {preQuit ? null : (
+          <StatsRow
+            profile={profile}
+            now={now}
+            moneyEquivalents={data.preferences?.moneyEquivalents}
+          />
+        )}
+
+        {preQuit ? (
+          <PreQuitPrepCard />
+        ) : (
+          <BodyNowCarousel
+            states={states}
+            showEmergingEvidence={showEmergingEvidence}
+            onOpenMilestone={setSheetMilestone}
+          />
+        )}
+
+        <WinsStrip cravings={data.cravings} />
+
+        {/* Not gated on `preQuit` — see FreedomCard's own note. */}
+        <FreedomCard
+          assessments={data.beliefAssessments}
+          cravings={data.cravings}
+          now={now}
+        />
+
+        <DiscoveryCard now={now} onOpenMilestone={setSheetMilestone} />
+
+        <SlipCheckinCard cravings={data.cravings} now={now} />
+      </div>
+
+      <MilestoneSheet
+        milestone={sheetMilestone}
+        onClose={() => setSheetMilestone(null)}
+        quitAt={quitAt}
+        now={now}
+      />
+    </>
   );
 }

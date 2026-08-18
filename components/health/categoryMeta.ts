@@ -1,0 +1,31 @@
+import type { MilestoneCategory } from '@/domain/types';
+
+/**
+ * Display metadata for the 20 milestone categories. Lives under
+ * `components/health/` (not `data/`) because it is presentation only — the
+ * dataset itself stays free of emoji and UI wording.
+ */
+export const CATEGORY_META: Record<MilestoneCategory, { label: string; emoji: string }> = {
+  heart: { label: 'Heart', emoji: '❤️' },
+  lungs: { label: 'Lungs', emoji: '🫁' },
+  brain: { label: 'Brain', emoji: '🧠' },
+  sleep: { label: 'Sleep', emoji: '😴' },
+  skin: { label: 'Skin', emoji: '✨' },
+  mouth: { label: 'Mouth', emoji: '😁' },
+  circulation: { label: 'Circulation', emoji: '🩸' },
+  exercise: { label: 'Exercise', emoji: '🏃' },
+  senses: { label: 'Senses', emoji: '👃' },
+  immune: { label: 'Immune system', emoji: '🛡️' },
+  'cancer-risk': { label: 'Cancer risk', emoji: '📉' },
+  'sexual-health': { label: 'Sexual health', emoji: '💞' },
+  mental: { label: 'Mind', emoji: '🧘' },
+  fertility: { label: 'Fertility', emoji: '🌱' },
+  metabolic: { label: 'Metabolic', emoji: '⚖️' },
+  eyes: { label: 'Eyes', emoji: '👁️' },
+  bones: { label: 'Bones', emoji: '🦴' },
+  family: { label: 'Family', emoji: '👨‍👩‍👧' },
+  freedom: { label: 'Freedom', emoji: '🕊️' },
+  longevity: { label: 'Longevity', emoji: '⏳' },
+};
+
+export default CATEGORY_META;
