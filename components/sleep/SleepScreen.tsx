@@ -101,6 +101,10 @@ export function SleepScreen() {
 
   const view = deriveView(nativeStatus, sessions, now);
   const showUnavailable = ready && availability === 'unavailable';
+  // Native truth only: the row `ActiveMonitoringCard` above is showing, which
+  // the history list must leave alone (see its `liveSessionId` prop).
+  const liveSessionId =
+    nativeStatus?.phase === 'recording' ? (nativeStatus.sessionId ?? null) : null;
 
   return (
     <div className="flex flex-col gap-4 pt-2">
@@ -143,7 +147,12 @@ export function SleepScreen() {
       )}
 
       <SleepTrendSection trends={trends} />
-      <SleepHistoryList sessions={sessions} service={service} store={store} />
+      <SleepHistoryList
+        sessions={sessions}
+        service={service}
+        store={store}
+        liveSessionId={liveSessionId}
+      />
     </div>
   );
 }

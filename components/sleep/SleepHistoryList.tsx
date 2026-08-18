@@ -17,6 +17,15 @@ export type SleepHistoryListProps = {
   /** `null` when no recorder resolved yet (or unavailable) — deletes fall back to `store` directly. */
   service: SleepSessionService | null;
   store: DataStore;
+  /**
+   * The session native is recording RIGHT NOW, if any — excluded from this
+   * list. Tonight's in-progress recording belongs to the hero card above (with
+   * its Stop button), not to a history list whose every row offers a delete
+   * that would drop the row while native kept recording. Only native truth can
+   * answer this, which is why it is passed in rather than inferred from
+   * `state === 'recording'` (a state a crash-orphaned row also has).
+   */
+  liveSessionId?: string | null;
 };
 
 /**
@@ -48,7 +57,8 @@ function nightSummary(session: SleepSession, locale: Locale, m: Messages['sleep'
  * session whose analysis keeps failing, or one the app never finalized), and
  * it is also the only row that may still have a full night's audio sitting
  * on the device. Hiding those rows here left them undeletable — this list is
- * the ONLY per-night delete affordance in the app.
+ * the ONLY per-night delete affordance in the app. The single exception is
+ * `liveSessionId`, tonight's actually-running recording; see that prop.
  *
  * Deletion is always available, even when `service` is `null` (no recorder
  * resolved on this device/browser, e.g. production web reviewing nights
@@ -60,7 +70,12 @@ function nightSummary(session: SleepSession, locale: Locale, m: Messages['sleep'
  * to delete real, reachable clip files), falling back to the plain
  * `DataStore` removal otherwise.
  */
-export function SleepHistoryList({ sessions, service, store }: SleepHistoryListProps) {
+export function SleepHistoryList({
+  sessions,
+  service,
+  store,
+  liveSessionId = null,
+}: SleepHistoryListProps) {
   const { locale } = useLocale();
   const m = useMessages();
   const [pendingDelete, setPendingDelete] = useState<SleepSession | null>(null);
@@ -68,8 +83,11 @@ export function SleepHistoryList({ sessions, service, store }: SleepHistoryListP
   const [busy, setBusy] = useState(false);
 
   const nights = useMemo(
-    () => [...sessions].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
-    [sessions]
+    () =>
+      sessions
+        .filter((s) => s.id !== liveSessionId)
+        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
+    [sessions, liveSessionId]
   );
 
   if (nights.length === 0) return null;
