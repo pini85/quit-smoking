@@ -38,7 +38,8 @@ Install it on the test device (`adb install -r app-debug.apk` or sideload).
    active/running state were restored correctly. Then confirm the rotation
    actually happened:
    - `adb shell run-as app.unsmoke ls files/snore/sessions/<id>/` should show
-     both `seg_0000` and `seg_0001` (or later segments) for that session.
+     both `seg_0000.m4a` and `seg_0001.m4a` (or later segments) for that
+     session.
    - Check logcat for `NEXT_OUTPUT_FILE_STARTED` firing at the rotation
      boundary, and confirm there's no spurious "interrupted" state logged
      around the rotation — a false interruption there indicates the rotation
@@ -89,8 +90,18 @@ Install it on the test device (`adb install -r app-debug.apk` or sideload).
     normally.
 15. **Release-build manifest check.** Build a release variant and inspect the
     merged manifest (`apkanalyzer manifest print` or `aapt dump permissions`)
-    to confirm it does **not** request the `INTERNET` permission — snore
-    monitoring and its data must stay fully on-device.
+    to confirm both of the following. These are the two manifest-level
+    guarantees the README's privacy section makes, and a Capacitor manifest
+    regeneration can quietly drop either one:
+    - It does **not** request the `INTERNET` permission — snore monitoring and
+      its data must stay fully on-device. (Debug builds legitimately do declare
+      it, for live reload; check the *release* merged manifest.)
+    - The `<application>` tag carries
+      `android:dataExtractionRules="@xml/data_extraction_rules"` alongside
+      `android:allowBackup="false"`, and the referenced XML is present in the
+      APK's `res/xml/` with the `files/snore/` and `snore_session.xml`
+      exclusions intact under **both** `<cloud-backup>` and
+      `<device-transfer>`.
 16. **Short nap session.** Record a session under an hour (a nap rather than
     a full night). Confirm it's still analyzed and shown in history, but
     excluded from the trend charts (which should only reflect full-night
@@ -100,6 +111,25 @@ Install it on the test device (`adb install -r app-debug.apk` or sideload).
     Confirm the nights and their stats are restored, but that audio clips are
     absent — and that the UI hides the dangling clip references cleanly
     rather than showing broken playback controls.
+18. **The captured track is really 16 kHz mono.** Every threshold in
+    `domain/snore/*` was tuned against 16 kHz mono frames, and the feature
+    extractor asserts that rate — but some OEM audio stacks silently hand back
+    a different sample rate or channel count than `MediaRecorder` was asked
+    for, which shows up as an `EXTRACTION_FAILED` loop or, worse, plausible
+    numbers computed from mis-scaled audio. Verify the actual bytes rather than
+    the request:
+
+    ```
+    adb shell run-as app.unsmoke ls files/snore/sessions/<id>/
+    adb exec-out run-as app.unsmoke cat files/snore/sessions/<id>/seg_0000.m4a > seg_0000.m4a
+    ffprobe -v error -select_streams a:0 \
+      -show_entries stream=sample_rate,channels,codec_name seg_0000.m4a
+    ```
+
+    Expect `sample_rate=16000`, `channels=1`, AAC. (`mediainfo seg_0000.m4a`
+    works equally well if ffprobe isn't to hand.) Do this on each distinct OEM
+    device available, not just one — this is precisely the check that varies by
+    vendor.
 
 ## Known device-dependent risks to watch for
 
