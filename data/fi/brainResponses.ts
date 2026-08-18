@@ -74,7 +74,7 @@ export const FI_BRAIN_RESPONSES: Record<Belief, string[]> = {
     '”Tupakoitsija” oli jotain, mitä teit muutaman kerran tunnissa, ei persoonallisuus. Se näyttää rakenteelliselta vain sisältäpäin katsottuna.',
   ],
   deprivation: [
-    'Että luovut jostain. Nimeä se: mikä täsmälleen katoaisi elämästäsi tänä iltana?',
+    'Että menetät jotain. Nimeä se: mikä täsmälleen katoaisi elämästäsi tänä iltana?',
     'Menetyksen tunne on uskoa siihen, että hyöty oli todellinen. Täältä ei vähennetä mitään.',
     'Et jää ilman mitään. Olit ilman vuosikausia, kahdenkymmenen minuutin erissä, ja kutsuit sitä helpotusta nautinnoksi.',
   ],
