@@ -16,11 +16,21 @@ function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
 }
 
+/**
+ * Every collection in the file, counted — zeroes included, which is this
+ * line's existing convention ("0 reasons" already appears here today). This is
+ * the receipt shown before a REPLACE of an empty device, so it names what the
+ * file holds rather than what happens to be non-empty; the belief and freedom
+ * counts join on the same terms. A migrated v1 file legitimately reports zero
+ * for both — those collections did not exist in v1.
+ */
 function countLine(file: ExportFileV2): string {
   const parts = [
     `${file.cravings.length} craving${file.cravings.length === 1 ? '' : 's'}`,
     `${file.reasons.length} reason${file.reasons.length === 1 ? '' : 's'}`,
     `${file.achievementUnlocks.length} badge${file.achievementUnlocks.length === 1 ? '' : 's'}`,
+    `${file.beliefAssessments.length} belief check-in${file.beliefAssessments.length === 1 ? '' : 's'}`,
+    `${file.freedomSessions.length} freedom session${file.freedomSessions.length === 1 ? '' : 's'}`,
   ];
   return `${file.profile ? 'Profile, ' : 'No profile, '}${parts.join(', ')}.`;
 }

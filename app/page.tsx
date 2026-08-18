@@ -13,6 +13,7 @@ import { Hero } from '@/components/home/Hero';
 import { StatsRow } from '@/components/home/StatsRow';
 import { BodyNowCarousel, PreQuitPrepCard } from '@/components/home/BodyNowCarousel';
 import { WinsStrip } from '@/components/home/WinsStrip';
+import { FreedomCard } from '@/components/home/FreedomCard';
 import { DiscoveryCard } from '@/components/home/DiscoveryCard';
 import { SlipCheckinCard } from '@/components/home/SlipCheckinCard';
 
@@ -97,6 +98,13 @@ export default function TodayPage() {
         )}
 
         <WinsStrip cravings={data.cravings} />
+
+        {/* Not gated on `preQuit` — see FreedomCard's own note. */}
+        <FreedomCard
+          assessments={data.beliefAssessments}
+          cravings={data.cravings}
+          now={now}
+        />
 
         <DiscoveryCard now={now} onOpenMilestone={setSheetMilestone} />
 

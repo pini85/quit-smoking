@@ -51,6 +51,27 @@ function importErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ImportError ? err.reason : fallback;
 }
 
+/**
+ * "3 belief check-ins and 1 freedom session", or `null` when the file brings
+ * neither. Named only when non-zero, matching how the sentence above it
+ * already treats the adopted profile — a v1 backup carries no belief or
+ * freedom rows at all, and announcing two zeroes would just be noise.
+ */
+function newFreedomWork(summary: MergeSummary): string | null {
+  const parts: string[] = [];
+  if (summary.newBeliefAssessments > 0) {
+    parts.push(
+      `${summary.newBeliefAssessments} belief check-in${summary.newBeliefAssessments === 1 ? '' : 's'}`
+    );
+  }
+  if (summary.newFreedomSessions > 0) {
+    parts.push(
+      `${summary.newFreedomSessions} freedom session${summary.newFreedomSessions === 1 ? '' : 's'}`
+    );
+  }
+  return parts.length > 0 ? parts.join(' and ') : null;
+}
+
 type PendingImport = { file: ExportFileV2; summary: MergeSummary };
 
 /**
@@ -65,6 +86,7 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
   const [confirmingReplace, setConfirmingReplace] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  const pendingFreedomWork = pending ? newFreedomWork(pending.summary) : null;
   const lastExportAt = preferences?.lastExportAt ?? null;
   const staleExport =
     cravings.length > 0 &&
@@ -116,6 +138,8 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
       setPending(null);
       setConfirmingReplace(false);
       const parts = [`${summary.newCravings} new craving${summary.newCravings === 1 ? '' : 's'}`];
+      const freedomWork = newFreedomWork(summary);
+      if (freedomWork) parts.push(freedomWork);
       if (summary.profileAdopted) parts.push('profile adopted');
       showToast(`Imported — ${parts.join(', ')}.`);
     } catch (err) {
@@ -173,6 +197,7 @@ export function DataSection({ preferences, cravings, store, now }: DataSectionPr
             <p className="text-[14px] leading-relaxed text-ink">
               {pending.file.cravings.length} craving{pending.file.cravings.length === 1 ? '' : 's'} in
               file, {pending.summary.newCravings} new to this device.
+              {pendingFreedomWork ? ` Also new here: ${pendingFreedomWork}.` : ''}
               {pending.summary.profileAdopted
                 ? ' No profile on this device yet — the file’s profile will be adopted.'
                 : ''}
