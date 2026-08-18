@@ -217,7 +217,12 @@ export function createSnoreDetector(): SnoreDetector {
         const dbfsValues = frameIdx.map((idx) => frames[idx].rmsDbfs);
         const lowRatios = frameIdx.map((idx) => frames[idx].lowBandRatio);
         const avgDbfs = mean(dbfsValues);
-        const peakDbfs = Math.max(...dbfsValues);
+        // NOT `Math.max(...dbfsValues)`: a merged event over a full night of
+        // steady snoring at the 64ms production hop can have well over 100k
+        // candidate frames, and spreading that many arguments into Math.max
+        // exceeds V8's call-argument ceiling (RangeError). A reduce has no
+        // such limit.
+        const peakDbfs = dbfsValues.reduce((max, v) => (v > max ? v : max), -Infinity);
         const meanLowBandRatio = mean(lowRatios);
         const floorAtEventStart = floors[frameIdx[0]];
 
@@ -229,7 +234,12 @@ export function createSnoreDetector(): SnoreDetector {
           ? 0
           : populationStdDev(intervals, intervalMean) / intervalMean;
 
-        const regularity = clamp01(1 - cv / o.maxIntervalCv);
+        // UNCLAMPED per the brief's verbatim formula — only the final
+        // weighted sum is clamped below. A merged event whose combined
+        // burst intervals are irregular enough (cv > MAX_INTERVAL_CV) can
+        // and should push regularity negative, pulling confidence down
+        // rather than being floored at 0 here.
+        const regularity = 1 - cv / o.maxIntervalCv;
         const lowBandMargin = clamp01((meanLowBandRatio - o.minLowBandRatio) / (1 - o.minLowBandRatio));
         const loudnessMargin = clamp01((avgDbfs - floorAtEventStart - o.candidateDeltaDb) / 20);
         const runLength = clamp01(g.length / 8);

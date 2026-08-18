@@ -57,8 +57,13 @@ export function computeMetrics(events: SnoreEvent[], recordingDurationMs: number
       : intensityFromDbfs(
           events.reduce((sum, e) => sum + e.avgDbfs * (e.endMs - e.startMs), 0) / snoreDurationMs
         );
+  // NOT `Math.max(...events.map(...))`: avoid spreading a potentially large
+  // array into Math.max (V8's call-argument ceiling), matching the same fix
+  // in detect.ts for symmetry — a reduce has no such limit.
   const peakIntensity =
-    eventCount === 0 ? 0 : intensityFromDbfs(Math.max(...events.map((e) => e.peakDbfs)));
+    eventCount === 0
+      ? 0
+      : intensityFromDbfs(events.reduce((max, e) => (e.peakDbfs > max ? e.peakDbfs : max), -Infinity));
 
   const avgEventDurationMs = eventCount === 0 ? 0 : Math.round(snoreDurationMs / eventCount);
 

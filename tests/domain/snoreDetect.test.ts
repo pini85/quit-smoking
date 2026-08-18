@@ -185,6 +185,24 @@ describe('createSnoreDetector — event merging across gaps', () => {
     expect(result.events).toHaveLength(1);
     expect(result.events[0].startMs).toBe(5000);
     expect(result.events[0].endMs).toBe(33000);
+
+    // Confidence must reflect the merged event's OWN (post-merge) burst
+    // intervals, per the spec formula, with regularity LEFT UNCLAMPED (only
+    // the final weighted sum is clamped):
+    //   onsets = [5000, 9000, 13000, 24000, 28000, 32000]
+    //   intervals = [4000, 4000, 11000, 4000, 4000], mean = 5400
+    //   deviations = [-1400, -1400, 5600, -1400, -1400]
+    //   variance = (1400^2*4 + 5600^2) / 5 = 39,200,000 / 5 = 7,840,000
+    //   stddev = sqrt(7,840,000) = 2800 (exact)
+    //   cv = 2800 / 5400 = 0.518518... (> MAX_INTERVAL_CV of 0.5)
+    //   regularity = 1 - cv/0.5 = 1 - 1.037037... = -0.037037... (NEGATIVE,
+    //     not floored at 0 — this is the point of the test)
+    //   lowBandMargin = (1.0 - 0.5) / 0.5 = 1.0
+    //   loudnessMargin = (-22 - (-50) - 8) / 20 = 20/20 = 1.0
+    //   runLength = 6/8 = 0.75
+    //   confidence = 0.35*(-0.037037) + 0.25*1.0 + 0.25*1.0 + 0.15*0.75
+    //              = -0.012963 + 0.6125 = 0.599537... -> rounds to 0.60
+    expect(result.events[0].confidence).toBe(0.6);
   });
 
   it('does NOT merge two qualifying runs separated by EVENT_MERGE_GAP_MS + one hop (10100ms)', () => {
@@ -287,4 +305,50 @@ describe('createSnoreDetector — DetectorOptions overrides', () => {
     const overriddenResult = createSnoreDetector().analyze(frames, { minRunBursts: 2 });
     expect(overriddenResult.events).toHaveLength(1);
   });
+});
+
+describe('createSnoreDetector — large-input guard (steady snoring over a full night, production hop)', () => {
+  // Deliberately NOT using the generic `makeFrames` helper here: it does a
+  // `bursts.find(...)` scan per frame, which is fine for the handful of
+  // bursts in every other test but would be O(totalFrames * burstCount) —
+  // effectively unusable — at this scale. This generator instead computes
+  // "in burst?" with a single modulo check per frame, O(totalFrames) overall.
+  function makeSteadySnoringNight(): { tMs: number; rmsDbfs: number; lowBandRatio: number; midBandRatio: number }[] {
+    const hopMs = 64; // production hop (sampleRate 16000 / hopSamples 1024)
+    const totalMs = 10 * 3_600_000; // 10-hour night
+    const burstStartMs = 5000;
+    const burstPeriodMs = 4000;
+    const burstDurationMs = 1000;
+    const frames: { tMs: number; rmsDbfs: number; lowBandRatio: number; midBandRatio: number }[] = [];
+    for (let t = 0; t < totalMs; t += hopMs) {
+      const inBurst = t >= burstStartMs && (t - burstStartMs) % burstPeriodMs < burstDurationMs;
+      frames.push(
+        inBurst
+          ? { tMs: t, rmsDbfs: RHYTHMIC_BURST.dbfs, lowBandRatio: RHYTHMIC_BURST.lowBandRatio, midBandRatio: RHYTHMIC_BURST.midBandRatio }
+          : { tMs: t, rmsDbfs: QUIET.dbfs, lowBandRatio: QUIET.lowBandRatio, midBandRatio: QUIET.midBandRatio }
+      );
+    }
+    return frames;
+  }
+
+  it('does not throw on a merged event spanning >100k candidate frames (Math.max(...spread) would RangeError here)', () => {
+    const frames = makeSteadySnoringNight();
+    // ~9000 one-second bursts every 4s over 10 hours, ~15-16 candidate
+    // frames each at a 64ms hop -> comfortably over 100k candidate frames
+    // once merged into a single SnoreEvent (every inter-burst gap here is
+    // 3000ms, far under EVENT_MERGE_GAP_MS, so nothing here ever splits).
+    let result: ReturnType<ReturnType<typeof createSnoreDetector>['analyze']> | undefined;
+    expect(() => {
+      result = createSnoreDetector().analyze(frames);
+    }).not.toThrow();
+
+    expect(result).toBeDefined();
+    const events = (result as NonNullable<typeof result>).events;
+    expect(events).toHaveLength(1);
+    // All candidate frames share the same rmsDbfs, so both the mean (avgDbfs)
+    // and the max (peakDbfs) must equal that constant value exactly,
+    // regardless of exactly how many hundred thousand frames contributed.
+    expect(events[0].avgDbfs).toBe(RHYTHMIC_BURST.dbfs);
+    expect(events[0].peakDbfs).toBe(RHYTHMIC_BURST.dbfs);
+  }, 20_000);
 });
